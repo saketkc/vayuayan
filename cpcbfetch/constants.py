@@ -3,7 +3,7 @@ RSS_URL = "https://airquality.cpcb.gov.in/caaqms/rss_feed"
 RSS_URL2 = "https://airquality.cpcb.gov.in/caaqms/iit_rss_feed_with_coordinates"
 
 BASE_URL = "https://airquality.cpcb.gov.in"
-DOWNLOAD_URL = f"{BASE_URL}/dataRepository/download_file?file_name=Raw_data/"
+DOWNLOAD_URL = f"{BASE_URL}/dataRepository/download_file?file_name=Raw_data"
 
 ALL_STATION_URL = f"{BASE_URL}/aqi_dashboard/aqi_station_all_india"
 ALL_PARAMETERS_URL = f"{BASE_URL}/aqi_dashboard/aqi_all_Parameters"
@@ -54,3 +54,17 @@ MONTH_ABBREV = {
     "nov": "11",
     "dec": "12",
 }
+MONTHS = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+]

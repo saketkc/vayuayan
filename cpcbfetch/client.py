@@ -4,19 +4,17 @@ Main client class for interacting with CPCB Airquality web services
 
 import heapq
 import math
+import os
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
 
 import pandas as pd
 
 from .constants import ALL_STATION_URL, BASE_URL, DOWNLOAD_URL, POST_HEADERS
-from .exceptions import CPCBError
-from .utils import (
-    euclidean_distance,
-    haversine_distance,
-    safe_post,
-    time_to_isodate,
-    url_encode,
-)
+from .exceptions import CPCBError, NetworkError
+from .utils import (clean_station_name, euclidean_distance, haversine_distance,
+                    safe_get, safe_post, sort_station_data,
+                    stations_to_dataframe, time_to_isodate, url_encode)
 
 
 class CPCBClient:
@@ -34,7 +32,7 @@ class CPCBClient:
         self.station_url = ALL_STATION_URL
         self.cookies = {"ccr_public": "A"}
 
-    def list_stations(self):
+    def list_stations(self, as_dataframe=False):
         """
         Get list of all available cities
 
@@ -42,17 +40,161 @@ class CPCBClient:
         try:
             data = "e30="
             response = safe_post(
-                self.station_url, headers=POST_HEADERS, data=data, cookies=cookies
-            )["cities"]
+                self.station_url, headers=POST_HEADERS, data=data, cookies=self.cookies
+            )["stations"]
+            response = sort_station_data(response)
         except Exception as e:
             raise CPCBError(f"Failed to fetch cities: {str(e)}")
-
+        if as_dataframe:
+            return stations_to_dataframe(response)
         return response
 
-    def download_csv(self):
-        download_url = (
-            f"{DOWNLOAD_URL}/{time}/{year}/{site_id}_{station_name}_{time}.csv"
-        )
+    def download_hourly_aqi(self):
+        pass
+
+    def download_yearly_aqi(self):
+        pass
+        # aqi hourly data: https://airquality.cpcb.gov.in/dataRepository/download_file?file_name=AQI_hourly/city_level/delhi/2023/January/delhi_January_2023.xlsx
+
+    def download_raw_data(
+        self,
+        url: Optional[str] = None,
+        site_id: Optional[str] = None,
+        station_name: Optional[str] = None,
+        time_period: Optional[str] = "15Min",
+        year: Optional[str] = None,
+        output_dir: str = "downloads",
+        filename: Optional[str] = None,
+        return_dataframe: bool = False,
+        verbose: bool = False,
+    ) -> Union[str, pd.DataFrame, None]:
+        """
+        Download CSV file from CPCB data repository
+
+        Args:
+            url: Direct URL to download from (if provided, other parameters are ignored)
+            site_id: Station site ID (required if url not provided)
+            station_name: Station name (required if url not provided)
+            time_period: Time period for data (required if url not provided)
+            year: Year for data (required if url not provided)
+            output_dir: Directory to save downloaded file (default: "downloads")
+            filename: Custom filename (optional, auto-generated if not provided)
+            return_dataframe: Whether to return pandas DataFrame instead of file path
+            verbose: Whether to print status messages
+
+        Returns:
+            str: Path to downloaded file (if return_dataframe=False)
+            pd.DataFrame: Loaded DataFrame (if return_dataframe=True)
+            None: If download fails and return_dataframe=True
+
+        Raises:
+            CPCBError: If required parameters are missing or download fails
+            NetworkError: If network request fails
+
+        Examples:
+            # Download using direct URL
+            file_path = client.download_csv(
+                url="https://airquality.cpcb.gov.in/dataRepository/download_file?file_name=Raw_data/2024/Delhi_Punjabi_Bagh_2024.csv"
+            )
+
+            # Download using parameters
+            file_path = client.download_csv(
+                site_id="DL001",
+                station_name="Punjabi_Bagh",
+                time_period="2024",
+                year="2024"
+            )
+
+            # Get data as DataFrame
+            df = client.download_csv(
+                site_id="DL001",
+                station_name="Punjabi_Bagh",
+                time_period="2024",
+                year="2024",
+                return_dataframe=True
+            )
+        """
+
+        def log(message: str):
+            """Print message only if verbose mode is enabled"""
+            if verbose:
+                print(message)
+
+        # Construct URL if not provided directly
+        if url is None:
+            if not all([site_id, station_name, time_period, year]):
+                raise CPCBError(
+                    "Either 'url' must be provided, or all of 'site_id', 'station_name', "
+                    "'time_period', and 'year' must be provided"
+                )
+
+            station_name = clean_station_name(station_name)
+            # Construct URL using the pattern from constants
+            csv_filename = f"{site_id}_{station_name}_{time_period}.csv"
+            url = f"{DOWNLOAD_URL}/{time_period}/{year}/{csv_filename}"
+            log(f"Constructed URL: {url}")
+        log(f"Downloading CSV from: {url}")
+
+        try:
+            # Make the request
+            response = safe_get(
+                url, timeout=60, max_retries=3
+            )  # Longer timeout for file downloads
+
+            # Check if response contains CSV data
+            content_type = response.headers.get("content-type", "").lower()
+            if (
+                "text/csv" not in content_type
+                and "application/octet-stream" not in content_type
+            ):
+                # Sometimes CSV files are served with different content types
+                log(f"Warning: Unexpected content type: {content_type}")
+
+            # Generate filename if not provided
+            if filename is None:
+                if url:
+                    # Extract filename from URL
+                    filename = url.split("/")[-1]
+                    if "?" in filename:
+                        filename = filename.split("?")[0]
+                    if not filename.endswith(".csv"):
+                        filename += ".csv"
+                else:
+                    filename = f"{site_id}_{station_name}_{time_period}.csv"
+            filename = filename.replace(".csv", f"_{year}.csv")
+            # Ensure filename has .csv extension
+            if not filename.endswith(".csv"):
+                filename += ".csv"
+
+            # Create output directory if it doesn't exist
+            Path(output_dir).mkdir(parents=True, exist_ok=True)
+            file_path = Path(output_dir) / filename
+
+            # Write file
+            log(f"Saving to: {file_path}")
+            with open(file_path, "wb") as f:
+                f.write(response.content)
+
+            log(f"✅ Successfully downloaded: {file_path}")
+
+            # Return DataFrame if requested
+            if return_dataframe:
+                try:
+                    df = pd.read_csv(file_path)
+                    log(f"📊 Loaded DataFrame with shape: {df.shape}")
+                    return df
+                except Exception as e:
+                    log(f"❌ Failed to load CSV as DataFrame: {e}")
+                    if verbose:
+                        print(f"File saved at: {file_path}")
+                    return None
+
+            return str(file_path)
+
+        except NetworkError:
+            raise
+        except Exception as e:
+            raise CPCBError(f"Failed to download CSV: {str(e)}")
 
     def get_station_params(self, sid, date):
         data = url_encode({"station_id": sid, "date": date})
