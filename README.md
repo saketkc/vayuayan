@@ -35,7 +35,7 @@ cpcbfetch list_stations "Mumbai"
 
 ```bash
 # save the whole year of data for specific past year city wise in csv file
-cpcbfetch city_data --state "Maharashtra" --city "Mumbai" --year 2024 --path "AQI2024.csv"
+cpcbfetch city_data --city "Mumbai" --year 2024 --path "AQI2024.csv"
 ```
 
 ```bash
@@ -45,7 +45,7 @@ cpcbfetch station_data --site site_5964 --year 2024 --path "AQI2024.csv"
 
 ## API Reference
 
-### IMDWeatherClient
+### AQIClient
 
 #### Methods
 - `get_state_list()`: Get all available states

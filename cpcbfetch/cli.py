@@ -95,7 +95,7 @@ Examples:
   cpcbfetch list_states
   cpcbfetch list_cities "Maharashtra"
   cpcbfetch list_stations "Mumbai"
-  cpcbfetch city_data --state "Maharashtra" --city "Mumbai" --year 2024 --path "output.json"
+  cpcbfetch city_data --city "Mumbai" --year 2024 --path "output.json"
   cpcbfetch station_data --station_id "site_5964" --year 2024 --path "output.json"
         """,
     )
