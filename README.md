@@ -43,6 +43,11 @@ cpcbfetch city_data --city "Mumbai" --year 2024 --path "AQI2024.csv"
 cpcbfetch station_data --site site_5964 --year 2024 --path "AQI2024.csv"
 ```
 
+```bash
+# Fetch PM2.5 data for particular past year for particular region
+cpcbfetch pm25 --geojson_path "path/to/geojson/file.geojson --year 2019 --month 2 --combine True
+```
+
 ## API Reference
 
 ### AQIClient
@@ -53,6 +58,12 @@ cpcbfetch station_data --site site_5964 --year 2024 --path "AQI2024.csv"
 - `get_station_list(city)`: Get station list in city
 - `download_past_year_AQI_data_cityLevel(city, year, save_location)`: Get AQI data at city level
 - `download_past_year_AQI_data_stationLevel(station_id, year, save_location)`: Get AQI data at station level
+
+### PM25Client
+
+#### Methods
+- `get_pm25_stats(geojson_file, year, month)` : Get PM2.5 data for given geographic aread combined
+- `get_pm25_stats_by_polygon(geojson_file, year, month, id_field)` : Get Pm2.5 data for all subpolygon inside geojson file
 
 ## Contributing
 
