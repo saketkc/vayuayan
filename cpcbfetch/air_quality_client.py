@@ -321,6 +321,8 @@ class PM25Client:
                 feature_id = row[id_field]
             elif 'NAME_1' in row:
                 feature_id = row['NAME_1']
+            elif 'name' in row:
+                feature_id = row['name']
             results.append({"State/Union Territory": feature_id, "mean": mean_val, "std": std_val})
 
         return pd.DataFrame(results)
