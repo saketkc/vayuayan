@@ -7,13 +7,18 @@ from wsgiref import headers
 import requests
 import json
 import pandas as pd
+import geopandas as gpd
+import numpy as np
+import xarray as xr
+import rioxarray
+import os
 
 
 class AQIClient:
 
     def __init__(self):
         """
-        Initialize the IMD Weather Client
+        Initialize the AQI Client
 
         """
 
@@ -172,3 +177,150 @@ class AQIClient:
             df.to_csv(save_location, index=False)
             return df.head()
         return Exception("Data not found")
+
+
+
+class PM25Client:
+    
+    def __init__(self):
+        """
+        Initialize the PM2.5 Client
+
+        """
+        self.ANNUAL_PM2_DATA_BASE_PATH = "examples/V6GL01.0p10.CNNPM25.Global"
+        self.MONTHLY_PM2_DATA_BASE_PATH = "examples/V6GL01.0p10.CNNPM25.Global"
+
+    def get_netCDF_path(self, year: int, month: int = None) -> str:
+        if month is None:
+            path = self.ANNUAL_PM2_DATA_BASE_PATH + f".{year}01-{year}12.nc"
+        else:
+            path = self.MONTHLY_PM2_DATA_BASE_PATH + f".{year}{month:02d}-{year}{month:02d}.nc"
+        return path
+    
+    def get_pm25_stats(self, geojson_file, year: int, month: int = None):
+        """
+        Compute average and standard deviation of PM2.5
+        inside a polygon region from GeoJSON.
+
+        Args:
+            geojson_file (str): Path to GeoJSON file with polygon.
+            year (int): Year of the netCDF data.
+            month (int, optional): Month of the netCDF data. If None, use annual data. Defaults to None.
+
+        Returns:
+            dict: {"mean": value, "std": value}
+        """
+        # Check if netCDF data exist
+        nc_file = self.get_netCDF_path(year, month)
+
+        if not os.path.exists(nc_file):
+            raise FileNotFoundError(f"NetCDF data not found for year {year}, month {month}")
+        # check if geojson file exist
+        if not os.path.exists(geojson_file):
+            raise FileNotFoundError(f"GeoJSON file not found: {geojson_file}")
+        
+        # Load dataset
+        ds = xr.open_dataset(nc_file)
+
+        # Attach lat/lon coords
+        ds = ds.assign_coords(
+            lat=("lat", ds["latitude"].values),
+            lon=("lon", ds["longitude"].values),
+        )
+
+        pm25 = ds["PM25"]
+        # Rename lat/lon to y/x for rioxarray
+        pm25 = pm25.rename({"lat": "y", "lon": "x"})
+        # Write CRS (NetCDF is in WGS84 lat/lon)
+        pm25 = pm25.rio.write_crs("EPSG:4326")
+
+        # Read polygon from GeoJSON
+        gdf = gpd.read_file(geojson_file)
+        polygon = gdf.union_all()  # combine polygons if multiple
+
+        # Clip to polygon
+        clipped = pm25.rio.clip([polygon], crs="EPSG:4326")
+
+        # Extract values, remove NaNs
+        values = clipped.values.flatten()
+        values = values[~np.isnan(values)]
+
+        return {
+            "mean": float(values.mean()),
+            "std": float(values.std())
+        }
+
+
+    def get_pm25_stats_by_polygon(self, geojson_file, year: int, month: int=None, id_field=None):
+        """
+        Compute average and standard deviation of PM2.5
+        inside a polygon region from GeoJSON.
+
+        Args:
+            geojson_file (str): Path to GeoJSON file with polygon.
+            year (int): Year of the netCDF data.
+            month (int, optional): Month of the netCDF data. If None, use annual data. Defaults to None.
+            id_field (str, optional): Field in GeoJSON properties to use as identifier. If None, use index. Defaults to None.
+
+        Returns:
+            dict: {"mean": value, "std": value}
+        """
+        # Check if netCDF data exist
+        nc_file = self.get_netCDF_path(year, month)
+
+        if not os.path.exists(nc_file):
+            raise FileNotFoundError(f"NetCDF data not found for year {year}, month {month}")
+        # check if geojson file exist
+        if not os.path.exists(geojson_file):
+            raise FileNotFoundError(f"GeoJSON file not found: {geojson_file}")
+
+        # Load dataset
+        ds = xr.open_dataset(nc_file)
+
+        # Attach coordinates
+        ds = ds.assign_coords(
+            lat=("lat", ds["latitude"].values),
+            lon=("lon", ds["longitude"].values),
+        )
+
+        # --- FIX longitudes from [0,360] → [-180,180] ---
+        lon = ds["lon"].values
+        lon = np.where(lon > 180, lon - 360, lon)
+        ds = ds.assign_coords(lon=("lon", lon))
+
+        pm25 = ds["PM25"]
+
+        # Rename for rioxarray
+        pm25 = pm25.rename({"lat": "y", "lon": "x"})
+
+        # Assign CRS
+        pm25 = pm25.rio.write_crs("EPSG:4326")
+
+        # Read polygons
+        gdf = gpd.read_file(geojson_file)
+        results = []
+        for idx, row in gdf.iterrows():
+            geom = row.geometry
+
+            try:
+                clipped = pm25.rio.clip([geom], crs="EPSG:4326")
+                values = clipped.values.flatten()
+                values = values[~np.isnan(values)]
+
+                if values.size > 0:
+                    mean_val = float(values.mean())
+                    std_val = float(values.std())
+                else:
+                    mean_val, std_val = np.nan, np.nan
+            except Exception as e:
+                mean_val, std_val = np.nan, np.nan
+
+            feature_id = row[id_field] if id_field and id_field in row else idx
+            feature_id = idx
+            if id_field and id_field in row:
+                feature_id = row[id_field]
+            elif 'NAME_1' in row:
+                feature_id = row['NAME_1']
+            results.append({"State/Union Territory": feature_id, "mean": mean_val, "std": std_val})
+
+        return pd.DataFrame(results)
