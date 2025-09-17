@@ -7,9 +7,10 @@ __author__ = "Saket Choudhary"
 __email__ = "saketc@iitb.ac.in"
 
 from .client import CPCBClient
-from .air_quality_client import AQIClient
+from .air_quality_client import AQIClient, LiveAQIClient
 
 __all__ = [
     "CPCBClient",
     "AQIClient",
+    "LiveAQIClient"
 ]

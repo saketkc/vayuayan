@@ -9,7 +9,7 @@ import sys
 from typing import Optional
 from datetime import datetime
 
-from . import AQIClient
+from . import AQIClient, LiveAQIClient
 
 def get_state_list(client : AQIClient) -> None:
     """Display list of states available for AQI data."""
