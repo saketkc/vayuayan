@@ -6,11 +6,7 @@ __version__ = "0.1.0"
 __author__ = "Saket Choudhary"
 __email__ = "saketc@iitb.ac.in"
 
+from .air_quality_client import AQIClient, LiveAQIClient, PM25Client
 from .client import CPCBClient
-from .air_quality_client import AQIClient, LiveAQIClient
 
-__all__ = [
-    "CPCBClient",
-    "AQIClient",
-    "LiveAQIClient"
-]
+__all__ = ["CPCBClient", "AQIClient", "LiveAQIClient", "PM25Client"]

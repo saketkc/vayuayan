@@ -1,6 +1,5 @@
 # cpcbfetch
-A Python package for fetching pollution data from central pollution control baord(CPCB).
-
+A Python package for fetching pollution data from central pollution control board (CPCB).
 
 ## Installation
 
@@ -24,23 +23,58 @@ cpcbfetch list_states
 ```
 
 ```bash
-# List cities available in state for AQI
+# List cities available in a state for AQI
 cpcbfetch list_cities "Maharashtra"
 ```
 
 ```bash
-# List station available in city for AQI
+# List stations available in a city for AQI
 cpcbfetch list_stations "Mumbai"
 ```
 
 ```bash
-# save the whole year of data for specific past year city wise in csv file
+# Save the whole year of data for a specific past year city-wise in a CSV file
 cpcbfetch city_data --city "Mumbai" --year 2024 --path "AQI2024.csv"
 ```
 
 ```bash
-# save the whole year of data for specific past year station wise in csv file
-cpcbfetch station_data --site site_5964 --year 2024 --path "AQI2024.csv"
+# Save the whole year of data for a specific past year station-wise in a CSV file
+cpcbfetch station_data --station_id "site_5964" --year 2024 --path "AQI2024.csv"
+```
+
+```bash
+# Fetch current geolocation based on IP address
+cpcbfetch locate_me
+```
+
+```bash
+# Fetch nearest station details using IP-based geolocation
+cpcbfetch nearest_station
+```
+
+```bash
+# Fetch nearest station details using provided coordinates
+cpcbfetch nearest_station --lat 19.0760 --lon 72.8777
+```
+
+```bash
+# Fetch live AQI data for the nearest station using IP-based geolocation
+cpcbfetch live_aqi --date 2024-02-25 --hour 10 --path "output.json"
+```
+
+```bash
+# Fetch live AQI data for the nearest station using provided coordinates
+cpcbfetch live_aqi --lat 19.0760 --lon 72.8777 --path "output.json"
+```
+
+```bash
+# Fetch live AQI data for a specific station
+cpcbfetch live_aqi --station_id "site_5964" --path "output.json"
+```
+
+```bash
+# Fetch PM2.5 data for a particular past year for a specific region
+cpcbfetch pm25 --geojson_path "path/to/geojson/file.geojson" --year 2019 --month 2 --combine True
 ```
 
 ## API Reference
@@ -49,10 +83,23 @@ cpcbfetch station_data --site site_5964 --year 2024 --path "AQI2024.csv"
 
 #### Methods
 - `get_state_list()`: Get all available states
-- `get_city_list(state)`: Get city list in state
-- `get_station_list(city)`: Get station list in city
-- `download_past_year_AQI_data_cityLevel(city, year, save_location)`: Get AQI data at city level
-- `download_past_year_AQI_data_stationLevel(station_id, year, save_location)`: Get AQI data at station level
+- `get_city_list(state)`: Get city list in a state
+- `get_station_list(city)`: Get station list in a city
+- `download_past_year_AQI_data_cityLevel(city, year, save_location)`: Get AQI data at the city level
+- `download_past_year_AQI_data_stationLevel(station_id, year, save_location)`: Get AQI data at the station level
+
+### LiveAQIClient
+
+#### Methods
+- `get_system_location()`: Retrieve the system's approximate latitude and longitude using IP-based geolocation
+- `get_nearest_station(coords=None)`: Get the nearest air quality monitoring station based on given coordinates or system location
+- `get_live_aqi_data(station_id=None, coords=None, date=None, hour=None)`: Get live air quality parameters for a given station or coordinates and date/time
+
+### PM25Client
+
+#### Methods
+- `get_pm25_stats(geojson_file, year, month)`: Get PM2.5 data for a given geographic area combined
+- `get_pm25_stats_by_polygon(geojson_file, year, month, id_field)`: Get PM2.5 data for all sub-polygons inside a GeoJSON file
 
 ## Contributing
 
@@ -70,7 +117,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Disclaimer
 
-This package is not officially affiliated with the Central pollution control board. It's a third-party tool for accessing publicly available pollution data.
+This package is not officially affiliated with the Central Pollution Control Board. It's a third-party tool for accessing publicly available pollution data.
 
 ## Changelog
 
@@ -80,3 +127,13 @@ This package is not officially affiliated with the Central pollution control boa
 - City search functionality
 - Station search functionality
 
+### v0.2.0
+- PM2.5 past year data for any region in the world using geoJSON file of the region
+- combined data of all polygon inside a geoJSON region
+- granular detail of each polygon of geoJSON region
+
+### v0.3.0
+- Get system location(latitude and longitude)
+- Get nearest station to any location
+- Live air quality paramater values
+- For now available of india region only
