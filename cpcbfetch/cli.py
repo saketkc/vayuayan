@@ -46,11 +46,10 @@ def get_station_list(client: AQIClient, city: str) -> None:
     """Display station list in form 'station_id(station_name)' available in given city for AQI data"""
     try:
         complete_list = client.getCompleteList()
-        stationList = []
         stations = complete_list.get("stations", {})
+        stationList = []
         if stations and city in stations:
-            for station in stations[city]:
-                stationList.append(f"{station['value']}({station['label']})")
+            stationList.extend([f"{station['value']}({station['label']})" for station in stations[city]])
         print("Available stations for AQI data:")
         for station in stationList:
             print(f" - {station}")

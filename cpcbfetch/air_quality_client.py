@@ -35,7 +35,6 @@ class AQIClient:
             "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
             "Accept": "q=0.8;application/json;q=0.9",
         }
-        self.options = {headers: self.DEFAULT_HEADERS}
 
     # helper functions
     def encode_base64(self, data: bytes) -> str:
@@ -141,12 +140,14 @@ class AQIClient:
         Download past AQI data for a specific city.
         """
         data_file_paths = self.getFilePath("", "", "", city, "", "daily", "cityLevel")
-        file_path = ""
-        for entry in data_file_paths:
-            if entry["year"] == year:
-                file_path = entry["filepath"]
-                break
-        if file_path:
+        if file_path := next(
+            (
+                entry["filepath"]
+                for entry in data_file_paths
+                if entry["year"] == year
+            ),
+            "",
+        ):
             file_path = self.BASE_PATH + file_path
             df = pd.read_excel(file_path)
             df.to_csv(save_location, index=False)
@@ -175,12 +176,14 @@ class AQIClient:
         data_file_paths = self.getFilePath(
             station_id, station_name, "", "", "", "daily", "stationLevel"
         )
-        file_path = ""
-        for entry in data_file_paths:
-            if entry["year"] == year:
-                file_path = entry["filepath"]
-                break
-        if file_path:
+        if file_path := next(
+            (
+                entry["filepath"]
+                for entry in data_file_paths
+                if entry["year"] == year
+            ),
+            "",
+        ):
             file_path = self.BASE_PATH + file_path
             df = pd.read_excel(file_path)
             df.to_csv(save_location, index=False)
