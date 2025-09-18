@@ -28,8 +28,8 @@ class AQIClient:
             "https://airquality.cpcb.gov.in/dataRepository/download_file?file_name="
         )
         self.DATA_REPOSITORY = "/dataRepository/"
-        self.DATA_REPOSITORY_DROPDOWN = self.DATA_REPOSITORY + "all_india_stationlist"
-        self.FETCH_REPOSITORIES = self.DATA_REPOSITORY + "file_Path"
+        self.DATA_REPOSITORY_DROPDOWN = f"{self.DATA_REPOSITORY}all_india_stationlist"
+        self.FETCH_REPOSITORIES = f"{self.DATA_REPOSITORY}file_Path"
 
         self.DEFAULT_HEADERS = {
             "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
@@ -50,15 +50,12 @@ class AQIClient:
         """Fetch the complete list of all India stations and cities."""
         form_body = self.encode_base64(b"{}")
         response = requests.post(
-            self.BASE_URL + self.DATA_REPOSITORY_DROPDOWN, form_body
+            self.BASE_URL + self.DATA_REPOSITORY_DROPDOWN, form_body, timeout=30
         )
         if response.status_code == 200:
             response = self.decode_base64(response.text)
-            response = eval(response)
-            if response["status"] == "success":
-                return response["dropdown"]
-            else:
-                return {}
+            response = json.loads(response)  # Replaced eval() with json.loads()
+            return response["dropdown"] if response["status"] == "success" else {}
         else:
             response.raise_for_status()
 
@@ -66,37 +63,30 @@ class AQIClient:
         """Return list of states available for AQI data."""
         try:
             complete_list = self.getCompleteList()
-            stateList = []
-            for state in complete_list.get("cities", {}):
-                stateList.append(state)
-            return stateList
-        except:
+            return list(complete_list.get("cities", {}))
+        except Exception:
             return []
 
     def get_city_list(self, state: str) -> list:
         """Return list of cities available in given state for AQI data"""
         try:
             complete_list = self.getCompleteList()
-            cityList = []
             cities = complete_list.get("cities", {})
             if cities and state in cities:
-                for city in cities[state]:
-                    cityList.append(city["value"])
-            return cityList
-        except:
+                return [city["value"] for city in cities[state]]
+            return []
+        except Exception:
             return []
 
     def get_station_list(self, city: str) -> list:
         """Return station list in form 'station_id(station_name)' available in given city for AQI data"""
         try:
             complete_list = self.getCompleteList()
-            stationList = []
             stations = complete_list.get("stations", {})
             if stations and city in stations:
-                for station in stations[city]:
-                    stationList.append(station)
-            return stationList
-        except:
+                return list(stations[city])
+            return []
+        except Exception:
             return []
 
     def getFilePath(
@@ -135,15 +125,12 @@ class AQIClient:
         response = requests.post(
             self.BASE_URL + self.FETCH_REPOSITORIES,
             data=encoded_payload,
-            headers=self.DEFAULT_HEADERS,
-        )
+            headers=self.DEFAULT_HEADERS
+        , timeout=30)
         if response.status_code == 200:
             response = self.decode_base64(response.text)
-            response = eval(response)
-            if response["status"] == "success":
-                return response["data"]
-            else:
-                return {}
+            response = json.loads(response) 
+            return response["data"] if response["status"] == "success" else {}
         else:
             response.raise_for_status()
 
@@ -164,7 +151,7 @@ class AQIClient:
             df = pd.read_excel(file_path)
             df.to_csv(save_location, index=False)
             return df.head()
-        return Exception("Data not found")
+        raise Exception("Data not found")
 
     def download_past_year_AQI_data_stationLevel(
         self, station_id: str, year: str, save_location: str
@@ -212,14 +199,11 @@ class PM25Client:
         self.MONTHLY_PM2_DATA_BASE_PATH = "examples/V6GL01.0p10.CNNPM25.Global"
 
     def get_netCDF_path(self, year: int, month: int = None) -> str:
-        if month is None:
-            path = self.ANNUAL_PM2_DATA_BASE_PATH + f".{year}01-{year}12.nc"
-        else:
-            path = (
-                self.MONTHLY_PM2_DATA_BASE_PATH
-                + f".{year}{month:02d}-{year}{month:02d}.nc"
-            )
-        return path
+        return (
+            self.ANNUAL_PM2_DATA_BASE_PATH + f".{year}01-{year}12.nc"
+            if month is None
+            else self.MONTHLY_PM2_DATA_BASE_PATH + f".{year}{month:02d}-{year}{month:02d}.nc"
+        )
 
     def get_pm25_stats(self, geojson_file, year: int, month: int = None):
         """
@@ -341,14 +325,14 @@ class PM25Client:
             except Exception as e:
                 mean_val, std_val = np.nan, np.nan
 
-            feature_id = row[id_field] if id_field and id_field in row else idx
-            feature_id = idx
             if id_field and id_field in row:
                 feature_id = row[id_field]
             elif "NAME_1" in row:
                 feature_id = row["NAME_1"]
             elif "name" in row:
                 feature_id = row["name"]
+            else:
+                feature_id = idx
             results.append(
                 {"State/Union Territory": feature_id, "mean": mean_val, "std": std_val}
             )

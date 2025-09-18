@@ -45,7 +45,7 @@ cpcbfetch station_data --site site_5964 --year 2024 --path "AQI2024.csv"
 
 ```bash
 # Fetch PM2.5 data for particular past year for particular region
-cpcbfetch pm25 --geojson_path "path/to/geojson/file.geojson --year 2019 --month 2 --combine True
+cpcbfetch pm25 --geojson_path "path/to/geojson/file.geojson" --year 2019 --month 2 --combine True
 ```
 
 ## API Reference
@@ -62,8 +62,8 @@ cpcbfetch pm25 --geojson_path "path/to/geojson/file.geojson --year 2019 --month 
 ### PM25Client
 
 #### Methods
-- `get_pm25_stats(geojson_file, year, month)` : Get PM2.5 data for given geographic aread combined
-- `get_pm25_stats_by_polygon(geojson_file, year, month, id_field)` : Get Pm2.5 data for all subpolygon inside geojson file
+- `get_pm25_stats(geojson_file, year, month)` : Get PM2.5 data for given geographic area combined
+- `get_pm25_stats_by_polygon(geojson_file, year, month, id_field)` : Get PM2.5 data for all subpolygon inside geojson file
 
 ## Contributing
 

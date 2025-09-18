@@ -16,14 +16,12 @@ def get_state_list(client: AQIClient) -> None:
     """Display list of states available for AQI data."""
     try:
         complete_list = client.getCompleteList()
-        stateList = []
-        for state in complete_list.get("cities", {}):
-            stateList.append(state)
+        stateList = list(complete_list.get("cities", {}).keys())
         print("Available states for AQI data:")
         for state in stateList:
             print(f" - {state}")
-    except:
-        print("❌ Error fetching state list")
+    except Exception as e:
+        print(f"❌ Error fetching state list: {e}")
         return
 
 
@@ -31,17 +29,16 @@ def get_city_list(client: AQIClient, state: str) -> None:
     """Display list of cities available in given state for AQI data"""
     try:
         complete_list = client.getCompleteList()
-        cityList = []
         cities = complete_list.get("cities", {})
+        cityList = []
         if cities and state in cities:
-            for city in cities[state]:
-                cityList.append(city["value"])
+            cityList.extend([city["value"] for city in cities[state]])
         print("Available cities for AQI data:")
         for city in cityList:
             print(f" - {city}")
         return
-    except:
-        print("❌ Error fetching city list")
+    except Exception as e:
+        print(f"❌ Error fetching city list: {e}")
         return
 
 
@@ -181,8 +178,7 @@ Examples:
     )
     pm25_parser.add_argument(
         "--combine",
-        type=bool,
-        default=False,
+        action="store_true",
         help="Combine data within polygon (default: False)",
     )
     pm25_parser.add_argument(
