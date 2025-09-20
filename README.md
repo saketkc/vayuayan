@@ -135,5 +135,5 @@ This package is not officially affiliated with the Central Pollution Control Boa
 ### v0.3.0
 - Get system location(latitude and longitude)
 - Get nearest station to any location
-- Live air quality paramater values
-- For now available of india region only
+- Live air quality parameter values
+- Currently available for India region only

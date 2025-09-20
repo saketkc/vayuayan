@@ -16,6 +16,7 @@ import requests
 import rioxarray
 import xarray as xr
 import geopandas as gpd
+from geopy.distance import geodesic
 
 
 class AQIClient:
@@ -255,8 +256,10 @@ class LiveAQIClient:
             requests.exceptions.RequestException: If the request fails.
             json.JSONDecodeError: If the response cannot be decoded as JSON.  
         """
-        resp = requests.post(url=url, headers=headers, data=data, cookies=cookies)
-        data = b64decode(resp.content)
+        resp = requests.post(url=url, headers=headers, data=data, cookies=cookies, timeout=30)
+        if resp.status_code != 200:
+            raise requests.exceptions.RequestException(f"Request failed with status code {resp.status_code}")
+        data = base64.b64decode(resp.content)
         return json.loads(data)
     
     def get_system_location(self):
@@ -267,14 +270,14 @@ class LiveAQIClient:
             Exception: If the geolocation lookup fails.
         """
         try:
-            response = requests.get(self.COORDINATE_URL)
+            response = requests.get(self.COORDINATE_URL, timeout=30)
             data = response.json()
             if data.get('status') == 'success':
                 return data.get('lat'), data.get('lon')
             else:
                 raise Exception(f"Geolocation lookup failed: {data.get('message')}")
         except Exception as e:
-            raise Exception(f"Error retrieving system location: {e}")
+            raise Exception(f"Error retrieving system location: {e}") from e
     
     def get_nearest_station(self, coords=None):
         """
@@ -285,25 +288,25 @@ class LiveAQIClient:
             str: The ID of the nearest station.
         """
         try:
-            stations_ = {}
             cities = self.get_all_india()
-            if coords:
-                X1, Y1 = [float(coords[0]), float(coords[1])]
-            else:
+            if not coords:
                 coords = self.get_system_location()
-                X1, Y1 = [float(coords[0]), float(coords[1])]
+            user_location = (float(coords[0]), float(coords[1]))
+            min_dist = float('inf')
+            nearest_station = None
             for stations in cities:
                 for station in stations.get("stationsInCity", []):
                     try:
-                        X2, Y2 = [float(station["latitude"]), float(station["longitude"])]
-                        distance = math.sqrt(((X1 - X2) ** 2) + ((Y1 - Y2) ** 2))
-                        stations_[station.get("id")] = distance
+                        station_location = (float(station["latitude"]), float(station["longitude"]))
+                        dist = geodesic(user_location, station_location).kilometers
+                        if dist < min_dist:
+                            min_dist = dist
+                            nearest_station = (station.get("id", None),station.get("name", None))
                     except (TypeError, ValueError):
                         continue
-            if not stations_:
-                raise Exception("No stations found or invalid station data.")
-            sorted_stations = dict(sorted(stations_.items(), key=lambda x: x[1]))
-            return list(sorted_stations.keys())[0]
+            if nearest_station:
+                return nearest_station
+            raise Exception("No stations found or invalid station data.")
         except Exception as e:
             raise Exception(f"Error finding nearest station: {e}")
     
@@ -323,7 +326,7 @@ class LiveAQIClient:
         Get live air quality data for a specific station over past 24 hour from date_time provided.
         Args:
             station_id (str): Station ID.
-            date (str): Date in 'YYYY-MM-DDTHH:00:00Z' format. //2025-09-16T23:00:00Z
+            date (str): Date in 'YYYY-MM-DDTHH:00:00Z' format. Example: '2025-09-16T23:00:00Z'
         Returns:
             dict: Live Air quality data for the specified station and date.
         Raises:
@@ -352,10 +355,10 @@ class LiveAQIClient:
         # Determine station_id
         if not station_id:
             if coords:
-                station_id = self.get_nearest_station(coords)
+                station_id = self.get_nearest_station(coords)[0]
             else:
                 sys_coords = self.get_system_location()
-                station_id = self.get_nearest_station(sys_coords)
+                station_id = self.get_nearest_station(sys_coords)[0]
 
         # Determine date and hour
         now = datetime.now()
@@ -366,13 +369,17 @@ class LiveAQIClient:
                 hour = int(hour)
                 if not (0 <= hour <= 23):
                     raise ValueError
-            except Exception:
-                raise ValueError("hour must be an integer between 0 and 23.")
+            except Exception as e:
+                raise ValueError("hour must be an integer between 0 and 23.") from e
             date_time = f"{date}T{hour:02d}:00:00Z"
         else:
             last_hour = now.replace(minute=0, second=0, microsecond=0)
             date_time = f"{date}T{last_hour.hour:02d}:00:00Z"
-        return self.live_aqi_data(station_id, date_time)
+        aqi_data = self.live_aqi_data(station_id, date_time)
+        if isinstance(aqi_data, Exception):
+            return aqi_data
+        aqi_data = self.clean_pollution_data(aqi_data)
+        return aqi_data
 
 
 class PM25Client:

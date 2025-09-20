@@ -110,7 +110,12 @@ def get_nearest_station(
         else:
             station_info = client.get_nearest_station()
         print("Nearest station details:")
-        print(station_info)
+        if isinstance(station_info, (list, tuple)) and len(station_info) == 2:
+            station_id, station_name = station_info
+            print(f"Station ID: {station_id}")
+            print(f"Station Name: {station_name}")
+        else:
+            print(station_info)
     except Exception as e:
         print(f"❌ Error fetching nearest station: {e}")
         return
@@ -127,13 +132,8 @@ def get_live_aqi(
     """Fetch live AQI data for nearest station or specified station"""
     try:
         aqi_data = client.get_live_aqi_data(station_id=station_id, coords=(lat, lon) if lat is not None and lon is not None else None, date=date, hour=hour)
-        # if station_id:
-        #     aqi_data = client.get_aqi_data(station_id, date, hour)
-        # elif lat is not None and lon is not None:
-        #     aqi_data = client.get_aqi_data_for_coords((lat, lon), date, hour)
-        # else:
-        #     aqi_data = client.get_aqi_data_for_coords()  # Uses IP-based geolocation
-
+        if isinstance(aqi_data, Exception):
+            print(f"❌ {aqi_data}")
         print("Live AQI data:")
         metrics = aqi_data.get('metrics', [])
         if metrics:
@@ -142,7 +142,7 @@ def get_live_aqi(
             for m in metrics:
                 print(f"{m['name']:<10} {m['avg']:<5} {m['min']:<5} {m['max']:<5} {m['avgDesc']}")
         else:
-            print("No metrics data available.")
+            print("No data available, possibly due to station being offline.")
 
         if path:
             with open(path, "w") as f:
@@ -260,10 +260,10 @@ Examples:
         "live_aqi", help="Fetch live AQI data for nearest station or specified station"
     )
     live_aqi_parser.add_argument(
-        "--lat", type=float, help="Latitude for IP-based geolocation"
+        "--lat", type=float, help="Latitude of geolocation"
     )
     live_aqi_parser.add_argument(
-        "--lon", type=float, help="Longitude for IP-based geolocation"
+        "--lon", type=float, help="Longitude of geolocation"
     )
     live_aqi_parser.add_argument(
         "--station_id", help="Station ID for specific station data"
