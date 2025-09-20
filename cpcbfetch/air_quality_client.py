@@ -3,16 +3,20 @@ Main client class for interacting with AQI services
 """
 
 import base64
-import json
-import os
+from base64 import b64encode, b64decode
 from wsgiref import headers
 
-import geopandas as gpd
 import numpy as np
+import math
+import json
+import os
+from datetime import datetime
 import pandas as pd
 import requests
 import rioxarray
 import xarray as xr
+import geopandas as gpd
+from geopy.distance import geodesic
 
 
 class AQIClient:
@@ -189,6 +193,193 @@ class AQIClient:
             df.to_csv(save_location, index=False)
             return df.head()
         return Exception("Data not found")
+
+class LiveAQIClient:
+    """
+    Client for fetching live air quality data.
+    """
+    def __init__(self):
+        self.BASE_URL = 'https://airquality.cpcb.gov.in'
+        self.COORDINATE_URL = "http://ip-api.com/json"
+        self.DASHBOARD = '/aqi_dashboard/'
+        self.aqi_station_all_india_url = f"{self.BASE_URL}{self.DASHBOARD}aqi_station_all_india"
+        self.aqi_all_parameters_url = f"{self.BASE_URL}{self.DASHBOARD}aqi_all_Parameters"
+        self.headers = { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'Accept': 'q=0.8;application/json;q=0.9' }
+        self.cookies = {
+            "ccr_public": "A"
+        }
+
+    def clean_pollution_data(self, data):
+        """
+        Clean the pollution data dictionary.
+        - Reduce chartData values for each hour and pollutant.
+        """
+        cleaned_data = data.copy()
+
+        # Clean chartData
+        if 'chartData' in data:
+            cleaned_chart_data = []
+            i = 0
+            for series in data['chartData']:
+                if not series or not isinstance(series, list) or len(series) < 2:
+                    continue
+                rows = series[1:]  # Skip header
+                live_data = []
+                for row in rows:
+                    if len(row) < 2:
+                        continue
+                    date = row[0]
+                    value = row[1]
+                    if date is None or value is None:
+                        continue
+                    live_data.append({'date': date, 'val': value})
+                # Reconstruct series with min/max values
+                reduced_series = {'name': cleaned_data['metrics'][i]['name'], 'data': live_data}
+                i += 1
+                cleaned_chart_data.append(reduced_series)
+            cleaned_data['last_hours'] = cleaned_chart_data
+            cleaned_data.pop('chartData', None)
+
+        return cleaned_data
+    
+    def mkrqs(self, url, headers, data, cookies):
+        """
+        Makes a POST request to the specified URL with the given headers, data, and cookies.
+        Args:
+            url (str): The URL to send the POST request to.
+            headers (dict): The headers to include in the request.
+            data (str): The data to include in the request body.
+            cookies (dict): The cookies to include in the request.
+        Returns:
+            dict: The JSON-decoded response from the server.
+        Raises:
+            requests.exceptions.RequestException: If the request fails.
+            json.JSONDecodeError: If the response cannot be decoded as JSON.  
+        """
+        resp = requests.post(url=url, headers=headers, data=data, cookies=cookies, timeout=30)
+        if resp.status_code != 200:
+            raise requests.exceptions.RequestException(f"Request failed with status code {resp.status_code}")
+        data = base64.b64decode(resp.content)
+        return json.loads(data)
+    
+    def get_system_location(self):
+        """Retrieve system's approximate longitude and latitude using IP-based geolocation.
+        Returns:
+            tuple: A tuple containing (longitude, latitude).
+        Raises:
+            Exception: If the geolocation lookup fails.
+        """
+        try:
+            response = requests.get(self.COORDINATE_URL, timeout=30)
+            data = response.json()
+            if data.get('status') == 'success':
+                return data.get('lat'), data.get('lon')
+            else:
+                raise Exception(f"Geolocation lookup failed: {data.get('message')}")
+        except Exception as e:
+            raise Exception(f"Error retrieving system location: {e}") from e
+    
+    def get_nearest_station(self, coords=None):
+        """
+        Get the nearest air quality monitoring station based on given coordinates.
+        Args:
+            coords (tuple): A tuple containing (longitude, latitude).
+        Returns:
+            str: The ID of the nearest station.
+        """
+        try:
+            cities = self.get_all_india()
+            if not coords:
+                coords = self.get_system_location()
+            user_location = (float(coords[0]), float(coords[1]))
+            min_dist = float('inf')
+            nearest_station = None
+            for stations in cities:
+                for station in stations.get("stationsInCity", []):
+                    try:
+                        station_location = (float(station["latitude"]), float(station["longitude"]))
+                        dist = geodesic(user_location, station_location).kilometers
+                        if dist < min_dist:
+                            min_dist = dist
+                            nearest_station = (station.get("id", None),station.get("name", None))
+                    except (TypeError, ValueError):
+                        continue
+            if nearest_station:
+                return nearest_station
+            raise Exception("No stations found or invalid station data.")
+        except Exception as e:
+            raise Exception(f"Error finding nearest station: {e}")
+    
+    # Returns all station ids, locations etc.
+    def get_all_india(self):
+        """
+        Get all air quality monitoring stations in India and their locations.
+        """
+        body = "e30="
+        try:
+            return self.mkrqs(self.aqi_station_all_india_url, self.headers, body, self.cookies)["stations"]
+        except Exception:
+            return self.mkrqs(self.aqi_station_all_india_url, self.headers, body, self.cookies)
+    
+    def live_aqi_data(self, station_id:str, date_time:str):
+        """
+        Get live air quality data for a specific station over past 24 hour from date_time provided.
+        Args:
+            station_id (str): Station ID.
+            date (str): Date in 'YYYY-MM-DDTHH:00:00Z' format. Example: '2025-09-16T23:00:00Z'
+        Returns:
+            dict: Live Air quality data for the specified station and date.
+        Raises:
+            Exception: If the request fails or returns an error.
+        """
+        if not station_id or not date_time:
+            raise ValueError("Both station_id and date_time must be provided.")
+        raw_body = json.dumps({
+            "station_id": station_id,
+            "date": date_time
+        })
+        data = b64encode(raw_body.encode()).decode('utf-8')
+        return self.mkrqs(self.aqi_all_parameters_url, self.headers, data, self.cookies)
+
+    def get_live_aqi_data(self, station_id=None, coords=None, date=None, hour=None):
+        """
+        Function to get live AQI data.
+        Args:
+            station_id (str, optional): Station ID. If not provided, will use coords or system location.
+            coords (tuple, optional): (latitude, longitude). Used if station_id is not provided.
+            date (str, optional): Date in 'YYYY-MM-DD' format. Defaults to today if not provided.
+            hour (int, optional): Hour (0-23). Defaults to last completed hour if not provided.
+        Returns:
+            dict: Live AQI data.
+        """
+        # Determine station_id
+        if not station_id:
+            if coords:
+                station_id = self.get_nearest_station(coords)[0]
+            else:
+                sys_coords = self.get_system_location()
+                station_id = self.get_nearest_station(sys_coords)[0]
+
+        # Determine date and hour
+        now = datetime.now()
+        if not date:
+            date = now.strftime('%Y-%m-%d')
+        if hour is not None:
+            try:
+                hour = int(hour)
+                if not (0 <= hour <= 23):
+                    raise ValueError
+            except Exception as e:
+                raise ValueError("hour must be an integer between 0 and 23.") from e
+            date_time = f"{date}T{hour:02d}:00:00Z"
+        else:
+            last_hour = now.replace(minute=0, second=0, microsecond=0)
+            date_time = f"{date}T{last_hour.hour:02d}:00:00Z"
+        aqi_data = self.live_aqi_data(station_id, date_time)
+        if isinstance(aqi_data, Exception):
+            return aqi_data
+        aqi_data = self.clean_pollution_data(aqi_data)
+        return aqi_data
 
 
 class PM25Client:
