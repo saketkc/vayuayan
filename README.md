@@ -1,105 +1,125 @@
-# cpcbfetch
-A Python package for fetching pollution data from central pollution control board (CPCB).
+# Vayuayan - The Path of Wind Data
+
+**Vayuayan** (वायुअयन) - meaning "path of the wind" in Sanskrit - is a comprehensive Python package for fetching and analyzing air quality data from multiple sources worldwide. While it currently specializes in India's Central Pollution Control Board (CPCB) data, it's designed to be extensible for air quality monitoring systems globally.
+
+## Features
+
+- 🌍 **Multi-source Air Quality Data**: Fetch from various air quality monitoring networks
+- 📊 **Historical AQI Data**: Access past air quality index data at city and station levels
+- 🔴 **Live Monitoring**: Real-time air quality data from monitoring stations
+- 🛰️ **Satellite PM2.5 Data**: Process satellite-derived PM2.5 data using GeoJSON polygons
+- 🗺️ **Geospatial Analysis**: Station location services and nearest station algorithms
+- 📱 **CLI & API**: Both command-line interface and programmatic API access
+- 🔄 **Auto-caching**: Intelligent caching for large satellite datasets
 
 ## Installation
 
 ```bash
-pip install git+https://github.com/saketlab/cpcbfetch.git
+pip install git+https://github.com/saketkc/vayuayan.git
 ```
 
 Or install from source:
 
 ```bash
-git clone https://github.com/saketkc/cpcbfetch.git
-cd cpcbfetch
+git clone https://github.com/saketkc/vayuayan.git
+cd vayuayan
 pip install -e .
 ```
+
+## Quick Start
 
 ### Command Line Interface
 
 ```bash
-# List states available for AQI
-cpcbfetch list_states
+# List available states/regions for AQI data
+vayuayan list_states
+
+# List cities in a state
+vayuayan list_cities "Maharashtra"
+
+# List monitoring stations in a city
+vayuayan list_stations "Mumbai"
+
+# Download historical city-level AQI data
+vayuayan city_data --city "Mumbai" --year 2024 --path "mumbai_aqi_2024.csv"
+
+# Download historical station-level data
+vayuayan station_data --station_id "site_5964" --year 2024 --path "station_data_2024.csv"
+
+# Get your current location (IP-based)
+vayuayan locate_me
+
+# Find nearest monitoring station
+vayuayan nearest_station --lat 19.0760 --lon 72.8777
+
+# Get live air quality data
+vayuayan live_aqi --station_id "site_5964" --path "live_data.json"
+
+# Analyze PM2.5 satellite data for a region
+vayuayan pm25 --geojson_path "delhi_ncr.geojson" --year 2023 --month 11
 ```
 
-```bash
-# List cities available in a state for AQI
-cpcbfetch list_cities "Maharashtra"
-```
+### Python API
 
-```bash
-# List stations available in a city for AQI
-cpcbfetch list_stations "Mumbai"
-```
+```python
+from vayuayan import CPCBHistorical, CPCBLive, PM25Client
 
-```bash
-# Save the whole year of data for a specific past year city-wise in a CSV file
-cpcbfetch city_data --city "Mumbai" --year 2024 --path "AQI2024.csv"
-```
+# Historical data client
+historical = CPCBHistorical()
+states = historical.get_state_list()
+mumbai_stations = historical.get_station_list("Mumbai")
 
-```bash
-# Save the whole year of data for a specific past year station-wise in a CSV file
-cpcbfetch station_data --station_id "site_5964" --year 2024 --path "AQI2024.csv"
-```
+# Live monitoring client
+live = CPCBLive()
+location = live.get_system_location()
+nearest_station = live.get_nearest_station(location)
+current_aqi = live.get_live_aqi_data()
 
-```bash
-# Fetch current geolocation based on IP address
-cpcbfetch locate_me
-```
-
-```bash
-# Fetch nearest station details using IP-based geolocation
-cpcbfetch nearest_station
-```
-
-```bash
-# Fetch nearest station details using provided coordinates
-cpcbfetch nearest_station --lat 19.0760 --lon 72.8777
-```
-
-```bash
-# Fetch live AQI data for the nearest station using IP-based geolocation
-cpcbfetch live_aqi --date 2024-02-25 --hour 10 --path "output.json"
-```
-
-```bash
-# Fetch live AQI data for the nearest station using provided coordinates
-cpcbfetch live_aqi --lat 19.0760 --lon 72.8777 --path "output.json"
-```
-
-```bash
-# Fetch live AQI data for a specific station
-cpcbfetch live_aqi --station_id "site_5964" --path "output.json"
-```
-
-```bash
-# Fetch PM2.5 data for a particular past year for a specific region
-cpcbfetch pm25 --geojson_path "path/to/geojson/file.geojson" --year 2019 --month 2 --combine True
+# Satellite PM2.5 analysis
+pm25 = PM25Client()
+delhi_stats = pm25.get_pm25_stats("delhi_ncr.geojson", 2023, 11)
 ```
 
 ## API Reference
 
-### AQIClient
+### CPCBHistorical
+High-level client for historical Air Quality Index data from CPCB India.
 
-#### Methods
-- `get_state_list()`: Get all available states
-- `get_city_list(state)`: Get city list in a state
-- `get_station_list(city)`: Get station list in a city
-- `download_past_year_AQI_data_cityLevel(city, year, save_location)`: Get AQI data at the city level
-- `download_past_year_AQI_data_stationLevel(station_id, year, save_location)`: Get AQI data at the station level
+**Key Methods:**
+- `get_state_list()`: Get all available states/regions
+- `get_city_list(state)`: Get cities in a specific state
+- `get_station_list(city)`: Get monitoring stations in a city
+- `download_past_year_aqi_data_city_level(city, year, path)`: Download city-level AQI data
+- `download_past_year_aqi_data_station_level(station_id, year, path)`: Download station-level data
 
-### LiveAQIClient
+### CPCBLive
+Client for live air quality monitoring data from CPCB India.
 
-#### Methods
-- `get_system_location()`: Retrieve the system's approximate latitude and longitude using IP-based geolocation
-- `get_nearest_station(coords=None)`: Get the nearest air quality monitoring station based on given coordinates or system location
-- `get_live_aqi_data(station_id=None, coords=None, date=None, hour=None)`: Get live air quality parameters for a given station or coordinates and date/time
+**Key Methods:**
+- `get_system_location()`: Get approximate location via IP geolocation
+- `get_nearest_station(coords=None)`: Find nearest monitoring station
+- `get_live_aqi_data(station_id=None, coords=None, date=None, hour=None)`: Get real-time AQI data
 
 ### PM25Client
+Specialized client for satellite-derived PM2.5 data processing.
 
-#### Methods
-- `get_pm25_stats(geojson_file, year, month)`: Get PM2.5 data for a given geographic area combined
-- `get_pm25_stats_by_polygon(geojson_file, year, month, id_field)`: Get PM2.5 data for all sub-polygons inside a GeoJSON file
+**Key Methods:**
+- `get_pm25_stats(geojson_file, year, month=None)`: Get PM2.5 statistics for a region
+- `get_pm25_stats_by_polygon(geojson_file, year, month=None)`: Analyze each polygon separately
+- `download_netcdf_if_needed(year, month=None)`: Auto-download satellite data from AWS
+
+## Data Sources
+
+- **CPCB India**: Central Pollution Control Board monitoring network
+- **WUSTL ACAG**: Washington University satellite PM2.5 data (Global)
+- **Future**: Extensible architecture for additional air quality networks
+
+## Documentation
+
+For detailed documentation, examples, and tutorials, visit:
+- [API Documentation](https://vayuayan.readthedocs.io/)
+- [Example Notebooks](./notebooks/)
+- [Project Guide](./CLAUDE.md)
 
 ## Contributing
 
@@ -117,23 +137,12 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Disclaimer
 
-This package is not officially affiliated with the Central Pollution Control Board. It's a third-party tool for accessing publicly available pollution data.
+This package is not officially affiliated with any government agency or air quality monitoring network. It's a third-party tool for accessing publicly available environmental data. Users are responsible for verifying data accuracy and following proper attribution guidelines.
 
-## Changelog
+## Etymology
 
-### v0.1.0
-- Initial release
-- Past year AQI data fetching
-- City search functionality
-- Station search functionality
+**Vayuayan** (वायुअयन) combines two Sanskrit words:
+- **Vayu** (वायु): Wind, air - the Hindu deity of wind and breath
+- **Ayan** (अयन): Path, journey, movement
 
-### v0.2.0
-- PM2.5 past year data for any region in the world using geoJSON file of the region
-- combined data of all polygon inside a geoJSON region
-- granular detail of each polygon of geoJSON region
-
-### v0.3.0
-- Get system location(latitude and longitude)
-- Get nearest station to any location
-- Live air quality parameter values
-- Currently available for India region only
+Together, "Vayuayan" means "the path of wind" - representing the journey and movement of air quality data across space and time.
