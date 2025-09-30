@@ -741,6 +741,9 @@ class PM25Client:
 
         # Load and process dataset
         with xr.open_dataset(nc_file) as ds:
+            print("NetCDF file opened successfully.")
+            print(f"Available variables: {list(ds.variables.keys())}")
+            print(f"Available coordinates: {list(ds.coords.keys())}")
             # Check if this is the new WUSTL format or old format
             if "PM25" in ds.variables:
                 pm25_var = "PM25"
@@ -751,6 +754,8 @@ class PM25Client:
                 raise ValueError(
                     f"PM2.5 variable not found. Available variables: {available_vars}"
                 )
+            
+            print(f"Using PM2.5 variable: {pm25_var}")
 
             # Handle coordinate naming variations
             if "latitude" in ds.coords and "longitude" in ds.coords:
@@ -762,6 +767,8 @@ class PM25Client:
                     "Could not find latitude/longitude coordinates in NetCDF file"
                 )
 
+            print(f"Using coordinates: {lat_coord}, {lon_coord}")
+
             # Assign coordinates and fix longitude range
             ds = ds.assign_coords(
                 lat=(lat_coord, ds[lat_coord].values),
@@ -769,51 +776,74 @@ class PM25Client:
             )
 
             lon = ds["lon"].values
+            print(f"Original longitude range: {lon.min()} to {lon.max()}")
             lon = np.where(lon > 180, lon - 360, lon)
             ds = ds.assign_coords(lon=("lon", lon))
+            print(f"Adjusted longitude range: {lon.min()} to {lon.max()}")
 
             pm25 = ds[pm25_var].rename({lat_coord: "y", lon_coord: "x"})
             pm25 = pm25.rio.write_crs("EPSG:4326")
+            print("PM2.5 data loaded and CRS set to EPSG:4326.")
 
             # Process each polygon
             gdf = gpd.read_file(geojson_file)
+            gdf = gdf.to_crs("EPSG:4326")
+            print(f"GeoJSON file loaded. Number of features: {len(gdf)}")
+            # Simplify geometries to reduce complexity
+            gdf["geometry"] = gdf["geometry"].simplify(tolerance=0.01)
+            print("Simplified GeoJSON geometries.")
+            # Clip the dataset to the bounding box of the GeoJSON
+            bbox = gdf.total_bounds  # [minx, miny, maxx, maxy]
+            print(f"Clipping dataset to GeoJSON bounding box: {bbox}")
+            pm25 = pm25.sel(x=slice(bbox[0], bbox[2]), y=slice(bbox[3], bbox[1]))
+            print("Dataset clipped to bounding box.")
+            
             results = []
 
-            for idx, row in gdf.iterrows():
-                geom = row.geometry
+            # Process polygons in chunks
+            chunk_size = 5
+            for i in range(0, len(gdf), chunk_size):
+                chunk = gdf.iloc[i:i + chunk_size]
+                print(f"Processing chunk {i // chunk_size + 1} of {len(gdf) // chunk_size + 1}")
+                for idx, row in chunk.iterrows():
+                    print(f"Processing feature {idx + 1} of {len(gdf)}")
+                    geom = row.geometry
 
-                try:
-                    clipped = pm25.rio.clip([geom], crs="EPSG:4326")
-                    values = clipped.values.flatten()
-                    values = values[~np.isnan(values)]
-
-                    if values.size > 0:
-                        mean_val = float(values.mean())
-                        std_val = float(values.std())
-                    else:
+                    try:
+                        print("   Clipping geometry...")
+                        clipped = pm25.rio.clip([geom], crs="EPSG:4326")
+                        print("   Clipping successful")
+                        values = clipped.values.flatten()
+                        print("   Clipped values:", values)
+                        values = values[~np.isnan(values)]
+                        print("   Non-NaN values:", values)
+                        if values.size > 0:
+                            mean_val = float(values.mean())
+                            std_val = float(values.std())
+                        else:
+                            mean_val, std_val = np.nan, np.nan
+                    except Exception as e:
+                        print(f"   Error processing feature {idx}: {e}")
                         mean_val, std_val = np.nan, np.nan
-                except Exception:
-                    mean_val, std_val = np.nan, np.nan
 
-                # Determine feature identifier
-                if id_field and id_field in row:
-                    feature_id = row[id_field]
-                elif "NAME_1" in row:
-                    feature_id = row["NAME_1"]
-                elif "name" in row:
-                    feature_id = row["name"]
-                else:
-                    feature_id = idx
+                    # Determine feature identifier
+                    if id_field and id_field in row:
+                        feature_id = row[id_field]
+                    elif "NAME_1" in row:
+                        feature_id = row["NAME_1"]
+                    elif "name" in row:
+                        feature_id = row["name"]
+                    else:
+                        feature_id = idx
 
-                results.append(
-                    {
-                        "State/Union Territory": feature_id,
-                        "mean": mean_val,
-                        "std": std_val,
-                    }
-                )
-
-            return pd.DataFrame(results)
+                    results.append(
+                        {
+                            "State/Union Territory": feature_id,
+                            "mean": mean_val,
+                            "std": std_val,
+                        }
+                    )
+                return pd.DataFrame(results)
 
     def clear_cache(self) -> None:
         """Clear all cached NetCDF files."""

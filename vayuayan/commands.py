@@ -1,5 +1,5 @@
 """
-Command functions for cpcbfetch CLI.
+Command functions for vayuayan CLI.
 """
 
 import json

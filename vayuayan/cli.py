@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Command-line interface for cpcbfetch package
+Command-line interface for vayuayan package
 """
 
 import argparse
@@ -24,25 +24,25 @@ from .commands import (
 def main():
     """Main CLI entry point"""
     parser = argparse.ArgumentParser(
-        description="cpcbfetch CLI - Get air quality(AQI, PM2.5), Water quality and Noise monitoring data",
+        description="vayuayan CLI - Get air quality monitoring data",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  cpcbfetch list_states
-  cpcbfetch list_cities "Maharashtra"
-  cpcbfetch list_stations "Mumbai"
-  cpcbfetch city_data --city "Mumbai" --year 2024 --path "output.json"
-  cpcbfetch station_data --station_id "site_5964" --year 2024 --path "output.json"
+  vayuayan list_states
+  vayuayan list_cities "Maharashtra"
+  vayuayan list_stations "Mumbai"
+  vayuayan city_data --city "Mumbai" --year 2024 --path "output.json"
+  vayuayan station_data --station_id "site_5964" --year 2024 --path "output.json"
 
-  cpcbfetch locate_me                       # Return lat, lon based on IP
-  cpcbfetch nearest_station                 # Uses IP-based geolocation
-  cpcbfetch nearest_station --lat 19.0760 --lon 72.8777
-  cpcbfetch live_aqi --date 2024-02-25 --hour 10 --path "output.json"   # Uses IP-based geolocation
-  cpcbfetch live_aqi --lat 19.0760 --lon 72.8777 --path "output.json"
-  cpcbfetch live_aqi --station_id "site_5964" --path "output.json"
+  vayuayan locate_me                       # Return lat, lon based on IP
+  vayuayan nearest_station                 # Uses IP-based geolocation
+  vayuayan nearest_station --lat 19.0760 --lon 72.8777
+  vayuayan live_aqi --date 2024-02-25 --hour 10 --path "output.json"   # Uses IP-based geolocation
+  vayuayan live_aqi --lat 19.0760 --lon 72.8777 --path "output.json"
+  vayuayan live_aqi --station_id "site_5964" --path "output.json"
 
   For PM2.5 data:
-  cpcbfetch pm25 --geojson_path "path/to/geojson/file.geojson --year 2019 --month 2 --combine True"
+  vayuayan pm25 --geojson_path "path/to/geojson/file.geojson --year 2019 --month 2 --combine"
         """,
     )
 
