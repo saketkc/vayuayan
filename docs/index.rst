@@ -79,7 +79,26 @@ Command Line Interface
    api_reference
    cli_reference
    examples
+   notebooks
    contributing
+
+Jupyter Notebooks
+==================
+
+Interactive Jupyter notebooks with hands-on examples are available in the ``notebooks/`` directory:
+
+1. **Getting Started** - Learn the basics of cpcbfetch
+2. **Historical Data Analysis** - Analyze AQI trends and patterns
+3. **Live Monitoring** - Real-time air quality monitoring
+4. **PM2.5 Regional Analysis** - Geographic analysis using GeoJSON
+
+To run the notebooks::
+
+   pip install cpcbfetch[notebooks]
+   cd notebooks
+   jupyter notebook
+
+See the notebooks README for detailed information about each notebook.
 
 API Reference
 =============

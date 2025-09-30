@@ -53,6 +53,11 @@ docs = [
     "sphinx",
     "sphinx-rtd-theme",
 ]
+notebooks = [
+    "jupyter",
+    "matplotlib",
+    "seaborn",
+]
 
 [project.urls]
 Homepage = "https://github.com/saketkc/cpcbfetch"

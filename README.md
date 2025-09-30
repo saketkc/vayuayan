@@ -101,6 +101,25 @@ cpcbfetch pm25 --geojson_path "path/to/geojson/file.geojson" --year 2019 --month
 - `get_pm25_stats(geojson_file, year, month)`: Get PM2.5 data for a given geographic area combined
 - `get_pm25_stats_by_polygon(geojson_file, year, month, id_field)`: Get PM2.5 data for all sub-polygons inside a GeoJSON file
 
+## 📓 Jupyter Notebooks
+
+Interactive Jupyter notebooks with detailed examples are available in the `notebooks/` directory:
+
+1. **Getting Started** - Introduction to cpcbfetch basics
+2. **Historical Data Analysis** - Analyze AQI trends over time
+3. **Live Monitoring** - Real-time air quality monitoring
+4. **PM2.5 Regional Analysis** - Geographic analysis using GeoJSON
+
+To use the notebooks:
+
+```bash
+pip install cpcbfetch[notebooks]
+cd notebooks
+jupyter notebook
+```
+
+See [notebooks/README.md](notebooks/README.md) for more details.
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
