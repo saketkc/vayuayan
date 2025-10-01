@@ -21,6 +21,7 @@ import requests
 import rioxarray
 import xarray as xr
 from geopy.distance import geodesic
+from tqdm import tqdm
 
 
 class CPCBHistorical:
@@ -588,8 +589,8 @@ class PM25Client:
         # Download from AWS
         aws_url = self._get_aws_url(year, month)
         print(f"Downloading PM2.5 data from AWS...")
-        print(f"   Source: {aws_url}")
-        print(f"   Destination: {cached_path}")
+        print(f"Source: {aws_url}")
+        print(f"Destination: {cached_path}")
 
         try:
             response = requests.get(aws_url, stream=True, timeout=300)
@@ -600,28 +601,25 @@ class PM25Client:
 
             # Get file size for progress indication
             total_size = int(response.headers.get("content-length", 0))
-            downloaded_size = 0
 
+            # Use tqdm progress bar
+            chunk_size = 8192
             with open(cached_path, "wb") as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    if chunk:
-                        f.write(chunk)
-                        downloaded_size += len(chunk)
-
-                        # Show progress every 10MB
-                        if downloaded_size % (10 * 1024 * 1024) == 0:
-                            if total_size > 0:
-                                progress = (downloaded_size / total_size) * 100
-                                print(
-                                    f"   Progress: {progress:.1f}% ({downloaded_size // (1024*1024)} MB)"
-                                )
-                            else:
-                                print(
-                                    f"   Downloaded: {downloaded_size // (1024*1024)} MB"
-                                )
+                with tqdm(
+                    total=total_size,
+                    unit="B",
+                    unit_scale=True,
+                    unit_divisor=1024,
+                    desc="Downloading",
+                    ncols=80,
+                ) as pbar:
+                    for chunk in response.iter_content(chunk_size=chunk_size):
+                        if chunk:
+                            f.write(chunk)
+                            pbar.update(len(chunk))
 
             final_size = cached_path.stat().st_size
-            print(f"Download complete: {final_size // (1024*1024)} MB")
+            print(f"✓ Download complete: {final_size / (1024*1024):.1f} MB")
             return str(cached_path)
 
         except requests.RequestException as e:
@@ -636,8 +634,12 @@ class PM25Client:
             raise IOError(f"Failed to write NetCDF file: {e}") from e
 
     def get_pm25_stats(
-        self, geojson_file: str, year: int, month: Optional[int] = None
-    ) -> Dict[str, float]:
+        self,
+        geojson_file: str,
+        year: int,
+        month: Optional[int] = None,
+        group_by: Optional[str] = None,
+    ) -> Union[Dict[str, float], pd.DataFrame]:
         """Compute PM2.5 statistics inside a polygon region from GeoJSON.
 
         This function automatically downloads the required NetCDF data from AWS if not cached locally.
@@ -646,13 +648,20 @@ class PM25Client:
             geojson_file: Path to GeoJSON file with polygon.
             year: Year of the NetCDF data.
             month: Optional month of the NetCDF data.
+            group_by: Optional column name(s) to group polygons by.
+                     Can be a single column (e.g., 'state_name') or comma-separated
+                     multiple columns (e.g., 'state_name,district_name').
+                     If None, aggregates entire polygon boundary.
+                     If specified, aggregates by unique combinations of values.
 
         Returns:
-            Dictionary with 'mean', 'std', 'min', and 'max' statistics.
+            If group_by is None: Dictionary with mean, std, min, and max PM2.5 values.
+            If group_by is specified: DataFrame with statistics for each group.
 
         Raises:
             FileNotFoundError: If GeoJSON file not found.
             requests.RequestException: If NetCDF download fails.
+            ValueError: If group_by column not found in GeoJSON.
         """
         # Check GeoJSON file first
         if not os.path.exists(geojson_file):
@@ -661,7 +670,28 @@ class PM25Client:
         # Download NetCDF file if needed
         nc_file = self.download_netcdf_if_needed(year, month)
 
-        # Load and process dataset
+        # Read and process polygon first to get bounding box
+        gdf = gpd.read_file(geojson_file)
+        gdf = gdf.to_crs("EPSG:4326")
+
+        # If group_by is specified, delegate to grouped processing
+        if group_by is not None:
+            # Parse comma-separated columns
+            group_cols = [col.strip() for col in group_by.split(",")]
+
+            # Validate all columns exist
+            missing_cols = [col for col in group_cols if col not in gdf.columns]
+            if missing_cols:
+                raise ValueError(
+                    f"Column(s) {missing_cols} not found in GeoJSON. Available columns: {list(gdf.columns)}"
+                )
+
+            return self._get_pm25_stats_grouped(gdf, nc_file, group_cols)
+
+        # Otherwise, process as combined polygon
+        polygon = gdf.union_all()  # Combine polygons if multiple
+        bounds = polygon.bounds  # (minx, miny, maxx, maxy)
+
         with xr.open_dataset(nc_file) as ds:
             # Check if this is the new WUSTL format or old format
             if "PM25" in ds.variables:
@@ -684,23 +714,57 @@ class PM25Client:
                     "Could not find latitude/longitude coordinates in NetCDF file"
                 )
 
-            # Assign coordinates
-            ds = ds.assign_coords(
-                lat=(lat_coord, ds[lat_coord].values),
-                lon=(lon_coord, ds[lon_coord].values),
-            )
+            # Add small buffer to ensure we capture the polygon
+            lat_buffer = 0.1
+            lon_buffer = 0.1
 
-            pm25 = ds[pm25_var].rename({lat_coord: "y", lon_coord: "x"})
+            # Get the actual coordinate values to determine order
+            lat_vals = ds[lat_coord].values
+            lon_vals = ds[lon_coord].values
+
+            # Determine if coordinates are ascending or descending
+            lat_ascending = lat_vals[0] < lat_vals[-1]
+            lon_ascending = lon_vals[0] < lon_vals[-1]
+
+            if lat_ascending:
+                lat_slice = slice(bounds[1] - lat_buffer, bounds[3] + lat_buffer)
+            else:
+                lat_slice = slice(bounds[3] + lat_buffer, bounds[1] - lat_buffer)
+
+            if lon_ascending:
+                lon_slice = slice(bounds[0] - lon_buffer, bounds[2] + lon_buffer)
+            else:
+                lon_slice = slice(bounds[2] + lon_buffer, bounds[0] - lon_buffer)
+
+            ds_subset = ds.sel({lat_coord: lat_slice, lon_coord: lon_slice})
+
+            # Extract the PM25 variable
+            pm25 = ds_subset[pm25_var]
+
+            # Load into memory
+            pm25 = pm25.load()
+
+            # Ensure coordinates are ascending (required by rioxarray)
+            if not lat_ascending:
+                pm25 = pm25.sortby(lat_coord)
+            if not lon_ascending:
+                pm25 = pm25.sortby(lon_coord)
+
+            # Set spatial dimensions for rioxarray
+            pm25 = pm25.rio.set_spatial_dims(x_dim=lon_coord, y_dim=lat_coord)
             pm25 = pm25.rio.write_crs("EPSG:4326")
 
-            # Read and process polygon
-            gdf = gpd.read_file(geojson_file)
-            polygon = gdf.union_all()  # Combine polygons if multiple
-
             # Clip to polygon and calculate statistics
-            clipped = pm25.rio.clip([polygon], crs="EPSG:4326")
+            clipped = pm25.rio.clip([polygon], crs="EPSG:4326", all_touched=True)
+
+            # Get values and filter NaN
             values = clipped.values.flatten()
             values = values[~np.isnan(values)]
+
+            if len(values) == 0:
+                raise ValueError(
+                    "No valid PM2.5 data found within the polygon boundary"
+                )
 
             return {
                 "mean": float(values.mean()),
@@ -708,6 +772,156 @@ class PM25Client:
                 "min": float(values.min()),
                 "max": float(values.max()),
             }
+
+    def _get_pm25_stats_grouped(
+        self, gdf: gpd.GeoDataFrame, nc_file: Path, group_by: Union[str, List[str]]
+    ) -> pd.DataFrame:
+        """Compute PM2.5 statistics grouped by column(s) in the GeoDataFrame.
+
+        Args:
+            gdf: GeoDataFrame with geometries (already in EPSG:4326).
+            nc_file: Path to NetCDF file.
+            group_by: Column name(s) to group by. Can be a string or list of strings.
+
+        Returns:
+            DataFrame with statistics for each unique value/combination in group_by column(s).
+        """
+        # Ensure group_by is a list
+        group_cols = [group_by] if isinstance(group_by, str) else group_by
+        # Get overall bounding box for all geometries
+        bbox = gdf.total_bounds  # [minx, miny, maxx, maxy]
+
+        # Load dataset and subset to bounding box
+        with xr.open_dataset(nc_file) as ds:
+            # Check variable and coordinate names
+            if "PM25" in ds.variables:
+                pm25_var = "PM25"
+            elif "GWRPM25" in ds.variables:
+                pm25_var = "GWRPM25"
+            else:
+                available_vars = list(ds.variables.keys())
+                raise ValueError(
+                    f"PM2.5 variable not found. Available variables: {available_vars}"
+                )
+
+            if "latitude" in ds.coords and "longitude" in ds.coords:
+                lat_coord, lon_coord = "latitude", "longitude"
+            elif "lat" in ds.coords and "lon" in ds.coords:
+                lat_coord, lon_coord = "lat", "lon"
+            else:
+                raise ValueError(
+                    "Could not find latitude/longitude coordinates in NetCDF file"
+                )
+
+            # Get coordinate values to determine order
+            lat_vals = ds[lat_coord].values
+            lon_vals = ds[lon_coord].values
+            lat_ascending = lat_vals[0] < lat_vals[-1]
+            lon_ascending = lon_vals[0] < lon_vals[-1]
+
+            # Create slice with correct ordering
+            lat_buffer = 0.1
+            lon_buffer = 0.1
+
+            if lat_ascending:
+                lat_slice = slice(bbox[1] - lat_buffer, bbox[3] + lat_buffer)
+            else:
+                lat_slice = slice(bbox[3] + lat_buffer, bbox[1] - lat_buffer)
+
+            if lon_ascending:
+                lon_slice = slice(bbox[0] - lon_buffer, bbox[2] + lon_buffer)
+            else:
+                lon_slice = slice(bbox[2] + lon_buffer, bbox[0] - lon_buffer)
+
+            ds_subset = ds.sel({lat_coord: lat_slice, lon_coord: lon_slice})
+
+            # Extract PM25 variable
+            pm25 = ds_subset[pm25_var]
+            pm25 = pm25.load()
+
+            # Ensure coordinates are ascending
+            if not lat_ascending:
+                pm25 = pm25.sortby(lat_coord)
+            if not lon_ascending:
+                pm25 = pm25.sortby(lon_coord)
+
+            # Set spatial dimensions for rioxarray
+            pm25 = pm25.rio.set_spatial_dims(x_dim=lon_coord, y_dim=lat_coord)
+            pm25 = pm25.rio.write_crs("EPSG:4326")
+
+            # Group by the specified column(s) and process each group
+            results = []
+            # For single column, don't use list to avoid tuple wrapping
+            groupby_arg = group_cols[0] if len(group_cols) == 1 else group_cols
+
+            for group_name, group_gdf in gdf.groupby(groupby_arg):
+                # Combine all polygons in this group
+                combined_geom = group_gdf.union_all()
+
+                try:
+                    # Clip to the combined geometry
+                    clipped = pm25.rio.clip(
+                        [combined_geom], crs="EPSG:4326", all_touched=True
+                    )
+
+                    # Get values and filter NaN
+                    values = clipped.values.flatten()
+                    values = values[~np.isnan(values)]
+
+                    # Create result dict with group columns
+                    result = {}
+                    if len(group_cols) == 1:
+                        # Single column grouping - group_name is a scalar
+                        result[group_cols[0]] = group_name
+                    else:
+                        # Multiple column grouping - group_name is a tuple
+                        for i, col in enumerate(group_cols):
+                            result[col] = group_name[i]
+
+                    # Add statistics
+                    if len(values) > 0:
+                        result.update(
+                            {
+                                "mean": float(values.mean()),
+                                "std": float(values.std()),
+                                "min": float(values.min()),
+                                "max": float(values.max()),
+                                "count": len(values),
+                            }
+                        )
+                    else:
+                        result.update(
+                            {
+                                "mean": np.nan,
+                                "std": np.nan,
+                                "min": np.nan,
+                                "max": np.nan,
+                                "count": 0,
+                            }
+                        )
+
+                    results.append(result)
+
+                except Exception as e:
+                    print(f"Warning: Error processing group '{group_name}': {e}")
+                    result = {}
+                    if len(group_cols) == 1:
+                        result[group_cols[0]] = group_name
+                    else:
+                        for i, col in enumerate(group_cols):
+                            result[col] = group_name[i]
+                    result.update(
+                        {
+                            "mean": np.nan,
+                            "std": np.nan,
+                            "min": np.nan,
+                            "max": np.nan,
+                            "count": 0,
+                        }
+                    )
+                    results.append(result)
+
+            return pd.DataFrame(results)
 
     def get_pm25_stats_by_polygon(
         self,
@@ -739,11 +953,12 @@ class PM25Client:
         # Download NetCDF file if needed
         nc_file = self.download_netcdf_if_needed(year, month)
 
-        # Load and process dataset
+        # Read GeoJSON and get overall bounding box first
+        gdf = gpd.read_file(geojson_file)
+        gdf = gdf.to_crs("EPSG:4326")
+        bbox = gdf.total_bounds  # [minx, miny, maxx, maxy]
+
         with xr.open_dataset(nc_file) as ds:
-            print("NetCDF file opened successfully.")
-            print(f"Available variables: {list(ds.variables.keys())}")
-            print(f"Available coordinates: {list(ds.coords.keys())}")
             # Check if this is the new WUSTL format or old format
             if "PM25" in ds.variables:
                 pm25_var = "PM25"
@@ -754,8 +969,6 @@ class PM25Client:
                 raise ValueError(
                     f"PM2.5 variable not found. Available variables: {available_vars}"
                 )
-            
-            print(f"Using PM2.5 variable: {pm25_var}")
 
             # Handle coordinate naming variations
             if "latitude" in ds.coords and "longitude" in ds.coords:
@@ -767,83 +980,86 @@ class PM25Client:
                     "Could not find latitude/longitude coordinates in NetCDF file"
                 )
 
-            print(f"Using coordinates: {lat_coord}, {lon_coord}")
+            lat_buffer = 0.1
+            lon_buffer = 0.1
 
-            # Assign coordinates and fix longitude range
-            ds = ds.assign_coords(
-                lat=(lat_coord, ds[lat_coord].values),
-                lon=(lon_coord, ds[lon_coord].values),
-            )
+            lat_vals = ds[lat_coord].values
+            lon_vals = ds[lon_coord].values
+            lat_ascending = lat_vals[0] < lat_vals[-1]
+            lon_ascending = lon_vals[0] < lon_vals[-1]
 
-            lon = ds["lon"].values
-            print(f"Original longitude range: {lon.min()} to {lon.max()}")
-            lon = np.where(lon > 180, lon - 360, lon)
-            ds = ds.assign_coords(lon=("lon", lon))
-            print(f"Adjusted longitude range: {lon.min()} to {lon.max()}")
+            if lat_ascending:
+                lat_slice = slice(bbox[1] - lat_buffer, bbox[3] + lat_buffer)
+            else:
+                lat_slice = slice(bbox[3] + lat_buffer, bbox[1] - lat_buffer)
 
-            pm25 = ds[pm25_var].rename({lat_coord: "y", lon_coord: "x"})
+            if lon_ascending:
+                lon_slice = slice(bbox[0] - lon_buffer, bbox[2] + lon_buffer)
+            else:
+                lon_slice = slice(bbox[2] + lon_buffer, bbox[0] - lon_buffer)
+
+            ds_subset = ds.sel({lat_coord: lat_slice, lon_coord: lon_slice})
+
+            # Extract the PM25 variable
+            pm25 = ds_subset[pm25_var]
+            pm25 = pm25.load()
+
+            # Ensure coordinates are ascending
+            if not lat_ascending:
+                pm25 = pm25.sortby(lat_coord)
+            if not lon_ascending:
+                pm25 = pm25.sortby(lon_coord)
+
+            # Set spatial dimensions for rioxarray
+            pm25 = pm25.rio.set_spatial_dims(x_dim=lon_coord, y_dim=lat_coord)
             pm25 = pm25.rio.write_crs("EPSG:4326")
-            print("PM2.5 data loaded and CRS set to EPSG:4326.")
 
-            # Process each polygon
-            gdf = gpd.read_file(geojson_file)
-            gdf = gdf.to_crs("EPSG:4326")
-            print(f"GeoJSON file loaded. Number of features: {len(gdf)}")
-            # Simplify geometries to reduce complexity
-            gdf["geometry"] = gdf["geometry"].simplify(tolerance=0.01)
-            print("Simplified GeoJSON geometries.")
-            # Clip the dataset to the bounding box of the GeoJSON
-            bbox = gdf.total_bounds  # [minx, miny, maxx, maxy]
-            print(f"Clipping dataset to GeoJSON bounding box: {bbox}")
-            pm25 = pm25.sel(x=slice(bbox[0], bbox[2]), y=slice(bbox[3], bbox[1]))
-            print("Dataset clipped to bounding box.")
-            
+            # Determine column name once at the beginning
+            if id_field and id_field in gdf.columns:
+                column_name = id_field
+            elif "NAME_1" in gdf.columns:
+                column_name = "NAME_1"
+            elif "name" in gdf.columns:
+                column_name = "name"
+            else:
+                column_name = "index"
+
             results = []
 
-            # Process polygons in chunks
-            chunk_size = 5
-            for i in range(0, len(gdf), chunk_size):
-                chunk = gdf.iloc[i:i + chunk_size]
-                print(f"Processing chunk {i // chunk_size + 1} of {len(gdf) // chunk_size + 1}")
-                for idx, row in chunk.iterrows():
-                    print(f"Processing feature {idx + 1} of {len(gdf)}")
-                    geom = row.geometry
+            # Process each polygon
+            for idx, row in gdf.iterrows():
+                geom = row.geometry
 
-                    try:
-                        print("   Clipping geometry...")
-                        clipped = pm25.rio.clip([geom], crs="EPSG:4326")
-                        print("   Clipping successful")
-                        values = clipped.values.flatten()
-                        print("   Clipped values:", values)
-                        values = values[~np.isnan(values)]
-                        print("   Non-NaN values:", values)
-                        if values.size > 0:
-                            mean_val = float(values.mean())
-                            std_val = float(values.std())
-                        else:
-                            mean_val, std_val = np.nan, np.nan
-                    except Exception as e:
-                        print(f"   Error processing feature {idx}: {e}")
-                        mean_val, std_val = np.nan, np.nan
+                try:
+                    clipped = pm25.rio.clip([geom], crs="EPSG:4326", all_touched=True)
 
-                    # Determine feature identifier
-                    if id_field and id_field in row:
-                        feature_id = row[id_field]
-                    elif "NAME_1" in row:
-                        feature_id = row["NAME_1"]
-                    elif "name" in row:
-                        feature_id = row["name"]
+                    # Get values and filter NaN
+                    values = clipped.values.flatten()
+                    values = values[~np.isnan(values)]
+
+                    if values.size > 0:
+                        mean_val = float(values.mean())
+                        std_val = float(values.std())
                     else:
-                        feature_id = idx
+                        mean_val, std_val = np.nan, np.nan
+                except Exception:
+                    mean_val, std_val = np.nan, np.nan
 
-                    results.append(
-                        {
-                            "State/Union Territory": feature_id,
-                            "mean": mean_val,
-                            "std": std_val,
-                        }
-                    )
-                return pd.DataFrame(results)
+                # Get feature identifier based on determined column
+                if column_name == "index":
+                    feature_id = idx
+                else:
+                    feature_id = row[column_name]
+
+                results.append(
+                    {
+                        column_name: feature_id,
+                        "mean": mean_val,
+                        "std": std_val,
+                    }
+                )
+
+            return pd.DataFrame(results)
 
     def clear_cache(self) -> None:
         """Clear all cached NetCDF files."""

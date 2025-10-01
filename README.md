@@ -55,8 +55,14 @@ vayuayan nearest_station --lat 19.0760 --lon 72.8777
 # Get live air quality data
 vayuayan live_aqi --station_id "site_5964" --path "live_data.json"
 
-# Analyze PM2.5 satellite data for a region
+# Analyze PM2.5 satellite data for a region (combines all polygons)
 vayuayan pm25 --geojson_path "delhi_ncr.geojson" --year 2023 --month 11
+
+# Analyze PM2.5 data grouped by state
+vayuayan pm25 --geojson_path "india_districts.geojson" --year 2023 --month 11 --group_by state_name
+
+# Analyze PM2.5 data grouped by multiple columns (state and district)
+vayuayan pm25 --geojson_path "india_districts.geojson" --year 2023 --month 11 --group_by state_name,district_name
 ```
 
 ### Python API
@@ -77,7 +83,12 @@ current_aqi = live.get_live_aqi_data()
 
 # Satellite PM2.5 analysis
 pm25 = PM25Client()
+# Combined stats for entire region
 delhi_stats = pm25.get_pm25_stats("delhi_ncr.geojson", 2023, 11)
+# Stats grouped by state
+state_stats = pm25.get_pm25_stats("india_districts.geojson", 2023, 11, group_by="state_name")
+# Stats grouped by multiple columns (state and district)
+district_stats = pm25.get_pm25_stats("india_districts.geojson", 2023, 11, group_by="state_name,district_name")
 ```
 
 ## API Reference
@@ -104,8 +115,8 @@ Client for live air quality monitoring data from CPCB India.
 Specialized client for satellite-derived PM2.5 data processing.
 
 **Key Methods:**
-- `get_pm25_stats(geojson_file, year, month=None)`: Get PM2.5 statistics for a region
-- `get_pm25_stats_by_polygon(geojson_file, year, month=None)`: Analyze each polygon separately
+- `get_pm25_stats(geojson_file, year, month=None, group_by=None)`: Get PM2.5 statistics for a region. Use `group_by` to aggregate by one or more GeoJSON columns (e.g., "state_name" or "state_name,district_name")
+- `get_pm25_stats_by_polygon(geojson_file, year, month=None)`: Analyze each polygon separately (deprecated, use `get_pm25_stats` instead)
 - `download_netcdf_if_needed(year, month=None)`: Auto-download satellite data from AWS
 
 ## Data Sources

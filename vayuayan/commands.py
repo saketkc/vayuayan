@@ -284,7 +284,7 @@ def get_pm25_data(
     geojson_path: str,
     year: int,
     month: Optional[int] = None,
-    combine: bool = False,
+    group_by: Optional[str] = None,
 ) -> bool:
     """Fetch and process PM2.5 data for given polygon and time period.
 
@@ -293,18 +293,17 @@ def get_pm25_data(
         geojson_path: Path to the GeoJSON file with polygon data.
         year: The year for which to fetch data.
         month: Optional month (1-12). If None, annual data is used.
-        combine: Whether to combine data within polygon.
+        group_by: Optional column name to group polygons by (e.g., 'state_name').
 
     Returns:
         True if successful, False otherwise.
     """
     try:
-        if combine:
-            data = client.get_pm25_stats(geojson_path, year, month)
-            print("Combined PM2.5 data overview:")
+        data = client.get_pm25_stats(geojson_path, year, month, group_by)
+        if group_by:
+            print(f"PM2.5 data grouped by '{group_by}':")
         else:
-            data = client.get_pm25_stats_by_polygon(geojson_path, year, month)
-            print("PM2.5 data by polygon:")
+            print("Combined PM2.5 data overview:")
 
         print(data)
         return True

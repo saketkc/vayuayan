@@ -42,7 +42,9 @@ Examples:
   vayuayan live_aqi --station_id "site_5964" --path "output.json"
 
   For PM2.5 data:
-  vayuayan pm25 --geojson_path "path/to/geojson/file.geojson --year 2019 --month 2 --combine"
+  vayuayan pm25 --geojson_path "districts.geojson" --year 2019 --month 2
+  vayuayan pm25 --geojson_path "districts.geojson" --year 2019 --month 2 --group_by state_name
+  vayuayan pm25 --geojson_path "districts.geojson" --year 2019 --month 2 --group_by state_name,district_name
         """,
     )
 
@@ -128,11 +130,6 @@ Examples:
         "pm25", help="Fetch PM2.5 data for given geographic polygon"
     )
     pm25_parser.add_argument(
-        "--combine",
-        action="store_true",
-        help="Combine data within polygon (default: False)",
-    )
-    pm25_parser.add_argument(
         "--geojson_path", required=True, help="Path to the GeoJSON file with polygon"
     )
     pm25_parser.add_argument(
@@ -142,6 +139,11 @@ Examples:
         "--month",
         type=int,
         help="Month of the data (1-12), if not provided, annual data is used",
+    )
+    pm25_parser.add_argument(
+        "--group_by",
+        type=str,
+        help="Column name(s) to group polygons by. Can be a single column (e.g., 'state_name') or comma-separated multiple columns (e.g., 'state_name,district_name').",
     )
 
     args = parser.parse_args()
@@ -185,7 +187,7 @@ Examples:
 
         elif args.command == "pm25":
             get_pm25_data(
-                pm25_client, args.geojson_path, args.year, args.month, args.combine
+                pm25_client, args.geojson_path, args.year, args.month, args.group_by
             )
 
     except KeyboardInterrupt:
