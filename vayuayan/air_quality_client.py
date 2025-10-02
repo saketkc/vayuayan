@@ -94,7 +94,11 @@ class CPCBHistorical:
         try:
             complete_list = self.get_complete_list()
             return list(sorted(complete_list.get("cities", {})))
-        except Exception:
+        except KeyError as e:
+            print(f"KeyError in get_state_list: {e}")
+            return []
+        except Exception as e:
+            print(f"Unexpected error in get_state_list: {e}")
             return []
 
     def get_city_list(self, state: str) -> List[str]:
