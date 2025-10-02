@@ -13,15 +13,15 @@ test:  ## Run tests
 	python -m pytest tests/ -v
 
 test-cov:  ## Run tests with coverage
-	python -m pytest tests/ --cov=cpcbfetch --cov-report=html --cov-report=term
+	python -m pytest tests/ --cov=vayuayan --cov-report=html --cov-report=term
 
 lint:  ## Run linting
-	flake8 cpcbfetch/ 
-	mypy cpcbfetch/
+	flake8 vayuayan/
+	mypy vayuayan/
 
 format:  ## Format code
-	black cpcbfetch/ 
-	isort cpcbfetch/
+	black vayuayan/
+	isort vayuayan/
 
 clean:  ## Clean build artifacts
 	rm -rf build/
@@ -55,7 +55,7 @@ example-batch:  ## Run batch processing example
 	python examples/batch_processing.py
 
 cli-help:  ## Show CLI help
-	python -m cpcbfetch --help
+	python -m vayuayan --help
 
 setup-dev:  ## Set up development environment
 	pip install -e ".[dev]"
