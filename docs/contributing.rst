@@ -1,7 +1,7 @@
 Contributing
 ============
 
-We welcome contributions to cpcbfetch! This guide will help you get started.
+We welcome contributions to vayuayan! This guide will help you get started.
 
 Development Setup
 -----------------
@@ -11,8 +11,8 @@ Development Setup
 
 .. code-block:: bash
 
-   git clone https://github.com/yourusername/cpcbfetch.git
-   cd cpcbfetch
+   git clone https://github.com/yourusername/vayuayan.git
+   cd vayuayan
 
 3. Set up the development environment:
 
@@ -63,10 +63,10 @@ Writing tests for new features:
 .. code-block:: python
 
    import pytest
-   from cpcbfetch import AQIClient
+   from vayuayan import CPCBHistorical
 
    def test_get_state_list():
-       client = AQIClient()
+       client = CPCBHistorical()
        states = client.get_state_list()
        assert isinstance(states, list)
        assert len(states) > 0
@@ -169,7 +169,7 @@ Bug Reports
 When reporting bugs, please include:
 
 - Python version
-- cpcbfetch version
+- vayuayan version
 - Operating system
 - Steps to reproduce
 - Expected vs actual behavior
@@ -199,4 +199,4 @@ Releases are handled by maintainers:
 License
 -------
 
-By contributing to cpcbfetch, you agree that your contributions will be licensed under the MIT License.
+By contributing to vayuayan, you agree that your contributions will be licensed under the MIT License.

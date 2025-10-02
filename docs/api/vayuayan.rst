@@ -1,7 +1,7 @@
-cpcbfetch package
+vayuayan package
 =================
 
-.. automodule:: cpcbfetch
+.. automodule:: vayuayan
    :members:
    :undoc-members:
    :show-inheritance:
@@ -9,50 +9,50 @@ cpcbfetch package
 Submodules
 ----------
 
-cpcbfetch.air_quality_client module
+vayuayan.air_quality_client module
 ------------------------------------
 
-.. automodule:: cpcbfetch.air_quality_client
+.. automodule:: vayuayan.air_quality_client
    :members:
    :undoc-members:
    :show-inheritance:
 
-cpcbfetch.cli module
+vayuayan.cli module
 --------------------
 
-.. automodule:: cpcbfetch.cli
+.. automodule:: vayuayan.cli
    :members:
    :undoc-members:
    :show-inheritance:
 
-cpcbfetch.client module
+vayuayan.client module
 -----------------------
 
-.. automodule:: cpcbfetch.client
+.. automodule:: vayuayan.client
    :members:
    :undoc-members:
    :show-inheritance:
 
-cpcbfetch.constants module
+vayuayan.constants module
 --------------------------
 
-.. automodule:: cpcbfetch.constants
+.. automodule:: vayuayan.constants
    :members:
    :undoc-members:
    :show-inheritance:
 
-cpcbfetch.exceptions module
+vayuayan.exceptions module
 ---------------------------
 
-.. automodule:: cpcbfetch.exceptions
+.. automodule:: vayuayan.exceptions
    :members:
    :undoc-members:
    :show-inheritance:
 
-cpcbfetch.utils module
+vayuayan.utils module
 ----------------------
 
-.. automodule:: cpcbfetch.utils
+.. automodule:: vayuayan.utils
    :members:
    :undoc-members:
    :show-inheritance:

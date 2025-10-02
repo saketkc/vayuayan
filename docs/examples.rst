@@ -1,7 +1,7 @@
 Examples
 ========
 
-This section provides comprehensive examples of using cpcbfetch for various use cases.
+This section provides comprehensive examples of using vayuayan for various use cases.
 
 Basic AQI Data Retrieval
 -------------------------
@@ -11,10 +11,10 @@ Getting State and City Information
 
 .. code-block:: python
 
-   from cpcbfetch import AQIClient
+   from vayuayan import CPCBHistorical
 
    # Initialize the client
-   client = AQIClient()
+   client = CPCBHistorical()
 
    # Get all available states
    states = client.get_state_list()
@@ -39,20 +39,19 @@ Downloading Historical Data
 
 .. code-block:: python
 
-   from cpcbfetch import AQIClient
+   from vayuayan import CPCBHistorical
    import pandas as pd
 
-   client = AQIClient()
+   client = CPCBHistorical()
 
    # Download city-level data
    try:
-       data = client.download_past_year_AQI_data_cityLevel("Mumbai", "2024", "mumbai_2024.csv")
+       data = client.download_past_year_aqi_data_city_level("Mumbai", "2024", "mumbai_2024.csv")
        
        # Read and analyze the data
        df = pd.read_csv("mumbai_2024.csv")
        print(f"Downloaded {len(df)} records for Mumbai 2024")
-       print(f"Average AQI: {df['AQI'].mean():.2f}")
-       print(f"Max AQI: {df['AQI'].max()}")
+       print(df.head())
        
    except Exception as e:
        print(f"Error downloading data: {e}")
@@ -65,11 +64,11 @@ Location-Based AQI Monitoring
 
 .. code-block:: python
 
-   from cpcbfetch import LiveAQIClient
+   from vayuayan import CPCBLive
    import json
 
    # Initialize live client
-   live_client = LiveAQIClient()
+   live_client = CPCBLive()
 
    # Get your current location
    location = live_client.get_system_location()
@@ -93,10 +92,10 @@ Historical Live Data
 
 .. code-block:: python
 
-   from cpcbfetch import LiveAQIClient
+   from vayuayan import CPCBLive
    from datetime import datetime, timedelta
 
-   live_client = LiveAQIClient()
+   live_client = CPCBLive()
 
    # Get data for specific date and time
    target_date = "2024-03-15"
@@ -121,7 +120,7 @@ Basic Regional Stats
 
 .. code-block:: python
 
-   from cpcbfetch import PM25Client
+   from vayuayan import PM25Client
    import geopandas as gpd
 
    # Initialize PM2.5 client
@@ -147,7 +146,7 @@ Multi-Polygon Analysis
 
 .. code-block:: python
 
-   from cpcbfetch import PM25Client
+   from vayuayan import PM25Client
    import pandas as pd
 
    pm25_client = PM25Client()
@@ -186,15 +185,15 @@ Air Quality Monitoring Dashboard
 
 .. code-block:: python
 
-   from cpcbfetch import AQIClient, LiveAQIClient
+   from vayuayan import CPCBHistorical, CPCBLive
    import pandas as pd
    import time
    from datetime import datetime
 
    class AQIMonitor:
        def __init__(self):
-           self.aqi_client = AQIClient()
-           self.live_client = LiveAQIClient()
+           self.aqi_client = CPCBHistorical()
+           self.live_client = CPCBLive()
            
        def monitor_location(self, duration_minutes=60, interval_minutes=5):
            """Monitor AQI for specified duration"""
@@ -251,14 +250,14 @@ Batch Data Processing
 
 .. code-block:: python
 
-   from cpcbfetch import AQIClient
+   from vayuayan import CPCBHistorical
    import pandas as pd
    from concurrent.futures import ThreadPoolExecutor
    import os
 
    class BatchProcessor:
        def __init__(self):
-           self.client = AQIClient()
+           self.client = CPCBHistorical()
            
        def download_city_data(self, city, year):
            """Download data for a single city"""
@@ -314,8 +313,8 @@ Error Handling and Retry Logic
 
 .. code-block:: python
 
-   from cpcbfetch import LiveAQIClient
-   from cpcbfetch.exceptions import NetworkError
+   from vayuayan import CPCBLive
+   from vayuayan.exceptions import NetworkError
    import time
    import logging
 
@@ -323,9 +322,9 @@ Error Handling and Retry Logic
    logging.basicConfig(level=logging.INFO)
    logger = logging.getLogger(__name__)
 
-   class RobustAQIClient:
+   class RobustCPCBHistorical:
        def __init__(self, max_retries=3, retry_delay=5):
-           self.client = LiveAQIClient()
+           self.client = CPCBLive()
            self.max_retries = max_retries
            self.retry_delay = retry_delay
        
@@ -381,7 +380,7 @@ Error Handling and Retry Logic
                    time.sleep(self.retry_delay)
 
    # Usage
-   robust_client = RobustAQIClient(max_retries=5, retry_delay=10)
+   robust_client = RobustCPCBHistorical(max_retries=5, retry_delay=10)
    
    # Get data with automatic retry
    data = robust_client.get_data_with_retry()

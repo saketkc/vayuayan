@@ -1,23 +1,23 @@
 API Reference
 =============
 
-This section provides detailed documentation for all cpcbfetch classes and functions.
+This section provides detailed documentation for all vayuayan classes and functions.
 
 Core Classes
 ------------
 
-AQIClient
+CPCBHistorical
 ~~~~~~~~~
 
-.. autoclass:: cpcbfetch.AQIClient
+.. autoclass:: vayuayan.CPCBHistorical
    :members:
    :undoc-members:
    :show-inheritance:
 
-LiveAQIClient
+CPCBLive
 ~~~~~~~~~~~~~
 
-.. autoclass:: cpcbfetch.LiveAQIClient
+.. autoclass:: vayuayan.CPCBLive
    :members:
    :undoc-members:
    :show-inheritance:
@@ -25,7 +25,7 @@ LiveAQIClient
 PM25Client
 ~~~~~~~~~~
 
-.. autoclass:: cpcbfetch.PM25Client
+.. autoclass:: vayuayan.PM25Client
    :members:
    :undoc-members:
    :show-inheritance:
@@ -33,7 +33,7 @@ PM25Client
 CPCBClient
 ~~~~~~~~~~
 
-.. autoclass:: cpcbfetch.CPCBClient
+.. autoclass:: vayuayan.CPCBClient
    :members:
    :undoc-members:
    :show-inheritance:
@@ -41,21 +41,21 @@ CPCBClient
 Utility Functions
 -----------------
 
-.. automodule:: cpcbfetch.utils
+.. automodule:: vayuayan.utils
    :members:
    :undoc-members:
 
 Constants
 ---------
 
-.. automodule:: cpcbfetch.constants
+.. automodule:: vayuayan.constants
    :members:
    :undoc-members:
 
 Exceptions
 ----------
 
-.. automodule:: cpcbfetch.exceptions
+.. automodule:: vayuayan.exceptions
    :members:
    :undoc-members:
    :show-inheritance:

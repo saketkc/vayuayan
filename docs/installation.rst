@@ -4,7 +4,7 @@ Installation
 Requirements
 ------------
 
-cpcbfetch requires Python 3.7 or higher and the following packages:
+vayuayan requires Python 3.7 or higher and the following packages:
 
 - requests>=2.25.0
 - pandas>=1.3.0
@@ -19,24 +19,24 @@ cpcbfetch requires Python 3.7 or higher and the following packages:
 Install from PyPI
 -----------------
 
-The recommended way to install cpcbfetch is via pip:
+The recommended way to install vayuayan is via pip:
 
 .. code-block:: bash
 
-   pip install cpcbfetch
+   pip install vayuayan
 
 Development Installation
 ------------------------
 
-If you want to contribute to cpcbfetch or install the latest development version:
+If you want to contribute to vayuayan or install the latest development version:
 
 .. code-block:: bash
 
-   git clone https://github.com/saketkc/cpcbfetch.git
-   cd cpcbfetch
+   git clone https://github.com/saketkc/vayuayan.git
+   cd vayuayan
    pip install -e ".[dev]"
 
-This will install cpcbfetch in development mode with all development dependencies including:
+This will install vayuayan in development mode with all development dependencies including:
 
 - pytest (for testing)
 - black (for code formatting)
@@ -51,11 +51,11 @@ To verify your installation, run:
 
 .. code-block:: python
 
-   import cpcbfetch
-   print(cpcbfetch.__version__)
+   import vayuayan
+   print(vayuayan.__version__)
 
 Or test the command line interface:
 
 .. code-block:: bash
 
-   cpcbfetch --help
+   vayuayan --help

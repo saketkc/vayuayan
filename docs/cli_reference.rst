@@ -1,20 +1,20 @@
 Command Line Interface
 ======================
 
-The cpcbfetch command line interface provides convenient access to all package functionality.
+The vayuayan command line interface provides convenient access to all package functionality.
 
 Basic Usage
 -----------
 
 .. code-block:: bash
 
-   cpcbfetch [command] [options]
+   vayuayan [command] [options]
 
 To see all available commands:
 
 .. code-block:: bash
 
-   cpcbfetch --help
+   vayuayan --help
 
 Data Discovery Commands
 -----------------------
@@ -26,7 +26,7 @@ List all available states for AQI data.
 
 .. code-block:: bash
 
-   cpcbfetch list_states
+   vayuayan list_states
 
 list_cities
 ~~~~~~~~~~~
@@ -35,7 +35,7 @@ List cities available in a specific state.
 
 .. code-block:: bash
 
-   cpcbfetch list_cities "Maharashtra"
+   vayuayan list_cities "Maharashtra"
 
 list_stations
 ~~~~~~~~~~~~~
@@ -44,7 +44,7 @@ List monitoring stations in a specific city.
 
 .. code-block:: bash
 
-   cpcbfetch list_stations "Mumbai"
+   vayuayan list_stations "Mumbai"
 
 Historical Data Commands
 ------------------------
@@ -56,7 +56,7 @@ Download yearly AQI data for a specific city.
 
 .. code-block:: bash
 
-   cpcbfetch city_data --city "Mumbai" --year 2024 --path "mumbai_aqi.csv"
+   vayuayan city_data --city "Mumbai" --year 2024 --path "mumbai_aqi.csv"
 
 **Parameters:**
 
@@ -71,7 +71,7 @@ Download yearly AQI data for a specific monitoring station.
 
 .. code-block:: bash
 
-   cpcbfetch station_data --station_id "site_5964" --year 2024 --path "station_aqi.csv"
+   vayuayan station_data --station_id "site_5964" --year 2024 --path "station_aqi.csv"
 
 **Parameters:**
 
@@ -89,7 +89,7 @@ Get your current location based on IP address.
 
 .. code-block:: bash
 
-   cpcbfetch locate_me
+   vayuayan locate_me
 
 nearest_station
 ~~~~~~~~~~~~~~~
@@ -99,10 +99,10 @@ Find the nearest air quality monitoring station.
 .. code-block:: bash
 
    # Using IP-based geolocation
-   cpcbfetch nearest_station
+   vayuayan nearest_station
 
    # Using specific coordinates
-   cpcbfetch nearest_station --lat 19.0760 --lon 72.8777
+   vayuayan nearest_station --lat 19.0760 --lon 72.8777
 
 **Parameters:**
 
@@ -117,16 +117,16 @@ Get live air quality data.
 .. code-block:: bash
 
    # For your current location
-   cpcbfetch live_aqi --path "current_aqi.json"
+   vayuayan live_aqi --path "current_aqi.json"
 
    # For specific coordinates
-   cpcbfetch live_aqi --lat 19.0760 --lon 72.8777 --path "mumbai_aqi.json"
+   vayuayan live_aqi --lat 19.0760 --lon 72.8777 --path "mumbai_aqi.json"
 
    # For specific station
-   cpcbfetch live_aqi --station_id "site_5964" --path "station_aqi.json"
+   vayuayan live_aqi --station_id "site_5964" --path "station_aqi.json"
 
    # For specific date and time
-   cpcbfetch live_aqi --date 2024-02-25 --hour 10 --path "historical_aqi.json"
+   vayuayan live_aqi --date 2024-02-25 --hour 10 --path "historical_aqi.json"
 
 **Parameters:**
 
@@ -147,11 +147,15 @@ Get PM2.5 data for geographic regions defined by GeoJSON files.
 
 .. code-block:: bash
 
-   # Get combined data for entire region
-   cpcbfetch pm25 --geojson_path "region.geojson" --year 2024 --month 3 --combine
+   # Analyze PM2.5 data for complete region
+   vayuayan pm25 --geojson_path "india_districts.geojson" --year 2023 --month 11
 
-   # Get data for each polygon separately
-   cpcbfetch pm25 --geojson_path "region.geojson" --year 2024 --month 3
+   # Analyze PM2.5 data grouped by state
+   vayuayan pm25 --geojson_path "india_districts.geojson" --year 2023 --month 11 --group_by state_name
+
+   # Analyze PM2.5 data grouped by multiple columns (state and district)
+   vayuayan pm25 --geojson_path "india_districts.geojson" --year 2023 --month 11 --group_by state_name,district_name
+
 
 **Parameters:**
 
@@ -170,7 +174,7 @@ Get detailed help for the CLI:
 
 .. code-block:: bash
 
-   cpcbfetch --help
+   vayuayan --help
 
 Examples
 --------
@@ -181,21 +185,21 @@ Complete Workflow Example
 .. code-block:: bash
 
    # 1. Find your location
-   cpcbfetch locate_me
+   vayuayan locate_me
 
    # 2. Find nearest station
-   cpcbfetch nearest_station
+   vayuayan nearest_station
 
    # 3. Get current AQI
-   cpcbfetch live_aqi --path "current_aqi.json"
+   vayuayan live_aqi --path "current_aqi.json"
 
    # 4. Explore available data
-   cpcbfetch list_states
-   cpcbfetch list_cities "Maharashtra"
-   cpcbfetch list_stations "Mumbai"
+   vayuayan list_states
+   vayuayan list_cities "Maharashtra"
+   vayuayan list_stations "Mumbai"
 
    # 5. Download historical data
-   cpcbfetch city_data --city "Mumbai" --year 2024 --path "mumbai_2024.csv"
+   vayuayan city_data --city "Mumbai" --year 2024 --path "mumbai_2024.csv"
 
 Error Handling
 --------------

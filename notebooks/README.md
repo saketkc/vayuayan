@@ -1,13 +1,13 @@
-# Jupyter Notebook Examples for cpcbfetch
+# Jupyter Notebook Examples for vayuayan
 
-This directory contains interactive Jupyter notebooks demonstrating various use cases of the cpcbfetch package.
+This directory contains interactive Jupyter notebooks demonstrating various use cases of the vayuayan package.
 
 ## 📚 Available Notebooks
 
 ### 1. Getting Started (`01_getting_started.ipynb`)
 **Difficulty:** Beginner
 
-Learn the basics of cpcbfetch:
+Learn the basics of vayuayan:
 - Installing and importing the package
 - Exploring available states, cities, and monitoring stations
 - Getting your location and finding nearest stations
@@ -67,9 +67,9 @@ Analyze PM2.5 data for geographic regions:
 
 ### Installation
 
-1. Install cpcbfetch:
+1. Install vayuayan:
 ```bash
-pip install cpcbfetch
+pip install vayuayan
 ```
 
 2. Install Jupyter:
@@ -116,7 +116,7 @@ These notebooks cover:
 
 ## 💡 Tips
 
-1. **Start with Notebook 1** if you're new to cpcbfetch
+1. **Start with Notebook 1** if you're new to vayuayan
 2. **Uncomment code blocks** marked with `# Uncomment to run` when you're ready to execute them
 3. **Customize locations** by changing coordinates to your area of interest
 4. **Save your work** frequently - some analyses may take time
@@ -128,7 +128,7 @@ These notebooks cover:
 
 **Import errors:**
 ```bash
-pip install --upgrade cpcbfetch pandas matplotlib geopandas
+pip install --upgrade vayuayan pandas matplotlib geopandas
 ```
 
 **Network timeouts:**
@@ -143,9 +143,9 @@ pip install --upgrade cpcbfetch pandas matplotlib geopandas
 
 ## 📖 Additional Resources
 
-- **Full Documentation:** https://cpcbfetch.readthedocs.io/
-- **GitHub Repository:** https://github.com/saketkc/cpcbfetch
-- **Issue Tracker:** https://github.com/saketkc/cpcbfetch/issues
+- **Full Documentation:** https://vayuayan.readthedocs.io/
+- **GitHub Repository:** https://github.com/saketkc/vayuayan
+- **Issue Tracker:** https://github.com/saketkc/vayuayan/issues
 
 ## 🤝 Contributing
 
@@ -158,10 +158,10 @@ Have an interesting analysis or use case? Consider contributing:
 
 ## 📝 License
 
-These notebooks are part of the cpcbfetch package and are distributed under the MIT License.
+These notebooks are part of the vayuayan package and are distributed under the MIT License.
 
 ---
 
 **Happy Analyzing! 🌍💚**
 
-For questions or issues, please visit the [GitHub repository](https://github.com/saketkc/cpcbfetch).
+For questions or issues, please visit the [GitHub repository](https://github.com/saketkc/vayuayan).

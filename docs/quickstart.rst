@@ -1,7 +1,7 @@
 Quick Start Guide
 =================
 
-This guide will help you get started with cpcbfetch quickly.
+This guide will help you get started with vayuayan quickly.
 
 Basic Usage
 -----------
@@ -13,7 +13,7 @@ First, import the necessary clients:
 
 .. code-block:: python
 
-   from cpcbfetch import AQIClient, LiveAQIClient, PM25Client
+   from vayuayan import CPCBHistorical, CPCBLive, PM25Client
 
 AQI Data (Historical)
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -23,7 +23,7 @@ Get historical air quality data:
 .. code-block:: python
 
    # Initialize AQI client
-   aqi_client = AQIClient()
+   aqi_client = CPCBHistorical()
 
    # Get list of available states
    states = aqi_client.get_state_list()
@@ -48,7 +48,7 @@ Get real-time air quality data:
 .. code-block:: python
 
    # Initialize Live AQI client
-   live_client = LiveAQIClient()
+   live_client = CPCBLive()
 
    # Get your system location
    location = live_client.get_system_location()
@@ -85,13 +85,13 @@ List Available Data
 .. code-block:: bash
 
    # List all states
-   cpcbfetch list_states
+   vayuayan list_states
 
    # List cities in Maharashtra
-   cpcbfetch list_cities "Maharashtra"
+   vayuayan list_cities "Maharashtra"
 
    # List stations in Mumbai
-   cpcbfetch list_stations "Mumbai"
+   vayuayan list_stations "Mumbai"
 
 Download Historical Data
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -99,10 +99,10 @@ Download Historical Data
 .. code-block:: bash
 
    # Download city-level AQI data
-   cpcbfetch city_data --city "Mumbai" --year 2024 --path "mumbai_aqi.csv"
+   vayuayan city_data --city "Mumbai" --year 2024 --path "mumbai_aqi.csv"
 
    # Download station-level AQI data
-   cpcbfetch station_data --station_id "site_5964" --year 2024 --path "station_aqi.csv"
+   vayuayan station_data --station_id "site_5964" --year 2024 --path "station_aqi.csv"
 
 Live Data Access
 ~~~~~~~~~~~~~~~~
@@ -110,16 +110,16 @@ Live Data Access
 .. code-block:: bash
 
    # Get your current location
-   cpcbfetch locate_me
+   vayuayan locate_me
 
    # Find nearest station
-   cpcbfetch nearest_station
+   vayuayan nearest_station
 
    # Get live AQI data
-   cpcbfetch live_aqi --path "current_aqi.json"
+   vayuayan live_aqi --path "current_aqi.json"
 
    # Get live AQI for specific coordinates
-   cpcbfetch live_aqi --lat 19.0760 --lon 72.8777 --path "mumbai_aqi.json"
+   vayuayan live_aqi --lat 19.0760 --lon 72.8777 --path "mumbai_aqi.json"
 
 PM2.5 Regional Data
 ~~~~~~~~~~~~~~~~~~~
@@ -127,7 +127,7 @@ PM2.5 Regional Data
 .. code-block:: bash
 
    # Get PM2.5 data for a region
-   cpcbfetch pm25 --geojson_path "region.geojson" --year 2024 --month 3 --combine
+   vayuayan pm25 --geojson_path "region.geojson" --year 2024 --month 3 --combine
 
 Error Handling
 --------------
@@ -136,10 +136,10 @@ The library includes robust error handling:
 
 .. code-block:: python
 
-   from cpcbfetch import AQIClient
-   from cpcbfetch.exceptions import NetworkError
+   from vayuayan import CPCBHistorical
+   from vayuayan.exceptions import NetworkError
 
-   client = AQIClient()
+   client = CPCBHistorical()
    
    try:
        data = client.get_state_list()

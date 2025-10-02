@@ -1,24 +1,24 @@
-cpcbfetch: Central Pollution Control Board Data Fetcher
+vayuayan: Collect and Analyze Air Quality and Pollution Data
 ========================================================
 
-A Python package for fetching and parsing air quality data from Central Pollution Control Board (CPCB India).
+A Python package for fetching and analysing air quality data from multiple sources worldwide:
 
-.. image:: https://img.shields.io/pypi/v/cpcbfetch.svg
-   :target: https://pypi.org/project/cpcbfetch/
+.. image:: https://img.shields.io/pypi/v/vayuayan.svg
+   :target: https://pypi.org/project/vayuayan/
    :alt: PyPI version
 
-.. image:: https://img.shields.io/pypi/pyversions/cpcbfetch.svg
-   :target: https://pypi.org/project/cpcbfetch/
+.. image:: https://img.shields.io/pypi/pyversions/vayuayan.svg
+   :target: https://pypi.org/project/vayuayan/
    :alt: Python versions
 
-.. image:: https://img.shields.io/github/license/saketkc/cpcbfetch.svg
-   :target: https://github.com/saketkc/cpcbfetch/blob/master/LICENSE
+.. image:: https://img.shields.io/github/license/saketkc/vayuayan.svg
+   :target: https://github.com/saketkc/vayuayan/blob/master/LICENSE
    :alt: License
 
 Overview
 --------
 
-cpcbfetch provides a simple and powerful interface to access pollution monitoring data from India's Central Pollution Control Board. It supports:
+vayuayan provides a simple and powerful interface to access pollution monitoring data from India's Central Pollution Control Board and WUSTL ACAG. It supports:
 
 - **Air Quality Index (AQI) data**: Historical and real-time air quality measurements
 - **PM2.5 data**: Fine particulate matter data for any geographic region using GeoJSON
@@ -33,18 +33,18 @@ Installation
 
 .. code-block:: bash
 
-   pip install cpcbfetch
+   pip install vayuayan
 
 Basic Usage
 ~~~~~~~~~~~
 
 .. code-block:: python
 
-   from cpcbfetch import AQIClient, LiveAQIClient, PM25Client
+   from vayuayan import CPCBHistorical, CPCBLive, PM25Client
 
    # Initialize clients
-   aqi_client = AQIClient()
-   live_client = LiveAQIClient()
+   aqi_client = CPCBHistorical()
+   live_client = CPCBLive()
    pm25_client = PM25Client()
 
    # Get available states
@@ -62,13 +62,13 @@ Command Line Interface
 .. code-block:: bash
 
    # List available states
-   cpcbfetch list_states
+   vayuayan list_states
 
    # Get city data for Mumbai in 2024
-   cpcbfetch city_data --city "Mumbai" --year 2024 --path "mumbai_aqi.csv"
+   vayuayan city_data --city "Mumbai" --year 2024 --path "mumbai_aqi.csv"
 
    # Get live AQI data for your location
-   cpcbfetch live_aqi --path "current_aqi.json"
+   vayuayan live_aqi --path "current_aqi.json"
 
 .. toctree::
    :maxdepth: 2
@@ -87,14 +87,14 @@ Jupyter Notebooks
 
 Interactive Jupyter notebooks with hands-on examples are available in the ``notebooks/`` directory:
 
-1. **Getting Started** - Learn the basics of cpcbfetch
+1. **Getting Started** - Learn the basics of vayuayan
 2. **Historical Data Analysis** - Analyze AQI trends and patterns
 3. **Live Monitoring** - Real-time air quality monitoring
 4. **PM2.5 Regional Analysis** - Geographic analysis using GeoJSON
 
 To run the notebooks::
 
-   pip install cpcbfetch[notebooks]
+   pip install vayuayan[notebooks]
    cd notebooks
    jupyter notebook
 
@@ -106,7 +106,7 @@ API Reference
 .. toctree::
    :maxdepth: 2
 
-   api/cpcbfetch
+   api/vayuayan
 
 Indices and tables
 ==================

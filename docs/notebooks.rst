@@ -1,7 +1,7 @@
 Jupyter Notebooks
 =================
 
-Interactive Jupyter notebooks provide hands-on examples for learning and using cpcbfetch effectively.
+Interactive Jupyter notebooks provide hands-on examples for learning and using vayuayan effectively.
 
 Overview
 --------
@@ -15,7 +15,7 @@ To use the notebooks, install the package with notebook dependencies:
 
 .. code-block:: bash
 
-   pip install cpcbfetch[notebooks]
+   pip install vayuayan[notebooks]
 
 This will install:
 
@@ -164,7 +164,7 @@ Import Errors
 
 .. code-block:: bash
 
-   pip install --upgrade cpcbfetch pandas matplotlib seaborn geopandas
+   pip install --upgrade vayuayan pandas matplotlib seaborn geopandas
 
 Network Timeouts
 ~~~~~~~~~~~~~~~~
@@ -259,9 +259,9 @@ Guidelines:
 Further Resources
 -----------------
 
-- **Complete Documentation:** https://cpcbfetch.readthedocs.io/
-- **Source Code:** https://github.com/saketkc/cpcbfetch
-- **Issues & Support:** https://github.com/saketkc/cpcbfetch/issues
+- **Complete Documentation:** https://vayuayan.readthedocs.io/
+- **Source Code:** https://github.com/saketkc/vayuayan
+- **Issues & Support:** https://github.com/saketkc/vayuayan/issues
 
 Next Steps
 ----------
