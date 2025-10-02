@@ -46,7 +46,7 @@ docs:  ## Build documentation
 	cd docs && make html
 
 docs-serve:  ## Serve documentation locally
-	cd docs/build/html && python -m http.server 8000
+	cd docs/_build/html && python -m http.server 8000
 
 example-basic:  ## Run basic usage example
 	python examples/basic_usage.py
