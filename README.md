@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/vayuayan.png" alt="Vayuayan Logo" width="200"/>
+</p>
+
 # Vayuayan
 
 **Vayuayan** is a comprehensive Python package for fetching and analysing air quality data from multiple sources worldwide:
