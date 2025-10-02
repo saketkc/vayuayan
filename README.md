@@ -88,42 +88,6 @@ state_stats = pm25.get_pm25_stats("india_districts.geojson", 2023, 11, group_by=
 district_stats = pm25.get_pm25_stats("india_districts.geojson", 2023, 11, group_by="state_name,district_name")
 ```
 
-## API Reference
-
-### CPCBHistorical
-High-level client for historical Air Quality Index data from CPCB India.
-
-**Key Methods:**
-- `get_state_list()`: Get all available states/regions
-- `get_city_list(state)`: Get cities in a specific state
-- `get_station_list(city)`: Get monitoring stations in a city
-- `download_past_year_aqi_data_city_level(city, year, path)`: Download city-level AQI data
-- `download_past_year_aqi_data_station_level(station_id, year, path)`: Download station-level data
-
-### CPCBLive
-Client for live air quality monitoring data from CPCB India.
-
-**Key Methods:**
-- `get_system_location()`: Get approximate location via IP geolocation
-- `get_nearest_station(coords=None)`: Find nearest monitoring station
-- `get_live_aqi_data(station_id=None, coords=None, date=None, hour=None)`: Get real-time AQI data
-
-### PM25Client
-Specialized client for satellite-derived PM2.5 data processing.
-
-**Key Methods:**
-- `get_pm25_stats(geojson_file, year, month=None, group_by=None)`: Get PM2.5 statistics for a region. Use `group_by` to aggregate by one or more GeoJSON columns (e.g., "state_name" or "state_name,district_name")
-- `get_pm25_stats_by_polygon(geojson_file, year, month=None)`: Analyze each polygon separately (deprecated, use `get_pm25_stats` instead)
-- `download_netcdf_if_needed(year, month=None)`: Auto-download satellite data from AWS
-
-
-## Documentation
-
-For detailed documentation, examples, and tutorials, visit:
-- [API Documentation](https://vayuayan.readthedocs.io/)
-- [Example Notebooks](./notebooks/)
-- [Project Guide](./CLAUDE.md)
-
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a pull request.
