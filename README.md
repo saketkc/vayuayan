@@ -1,16 +1,9 @@
-# Vayuayan - The Path of Wind Data
+# Vayuayan
 
-**Vayuayan** (वायुअयन) - meaning "path of the wind" in Sanskrit - is a comprehensive Python package for fetching and analyzing air quality data from multiple sources worldwide. While it currently specializes in India's Central Pollution Control Board (CPCB) data, it's designed to be extensible for air quality monitoring systems globally.
+**Vayuayan** is a comprehensive Python package for fetching and analysing air quality data from multiple sources worldwide:
 
-## Features
-
-- 🌍 **Multi-source Air Quality Data**: Fetch from various air quality monitoring networks
-- 📊 **Historical AQI Data**: Access past air quality index data at city and station levels
-- 🔴 **Live Monitoring**: Real-time air quality data from monitoring stations
-- 🛰️ **Satellite PM2.5 Data**: Process satellite-derived PM2.5 data using GeoJSON polygons
-- 🗺️ **Geospatial Analysis**: Station location services and nearest station algorithms
-- 📱 **CLI & API**: Both command-line interface and programmatic API access
-- 🔄 **Auto-caching**: Intelligent caching for large satellite datasets
+- **WUSTL ACAG**: [Washington University satellite PM2.5 data](https://sites.wustl.edu/acag/datasets/surface-pm2-5/) (Global)
+- **CPCB India**: pCentral Pollution Control Board](https://cpcb.nic.in/) monitoring network (India only)
 
 ## Installation
 
@@ -119,11 +112,6 @@ Specialized client for satellite-derived PM2.5 data processing.
 - `get_pm25_stats_by_polygon(geojson_file, year, month=None)`: Analyze each polygon separately (deprecated, use `get_pm25_stats` instead)
 - `download_netcdf_if_needed(year, month=None)`: Auto-download satellite data from AWS
 
-## Data Sources
-
-- **CPCB India**: Central Pollution Control Board monitoring network
-- **WUSTL ACAG**: Washington University satellite PM2.5 data (Global)
-- **Future**: Extensible architecture for additional air quality networks
 
 ## Documentation
 
@@ -134,13 +122,7 @@ For detailed documentation, examples, and tutorials, visit:
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+Contributions are welcome! Please feel free to submit a pull request.
 
 ## License
 
