@@ -135,7 +135,7 @@ This package is not officially affiliated with any government agency or air qual
 ## Etymology
 
 **Vayuayan** (वायुअयन) combines two Sanskrit words:
-- **Vayu** (वायु): Wind, air - the Hindu deity of wind and breath
+- **Vayu** (वायु): Wind, air 
 - **Ayan** (अयन): Path, journey, movement
 
 Together, "Vayuayan" means "the path of wind" - representing the journey and movement of air quality data across space and time.
