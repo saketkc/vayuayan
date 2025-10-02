@@ -154,6 +154,7 @@ class AQIClient:
         ):
             file_path = self.BASE_PATH + file_path
             df = pd.read_excel(file_path)
+            df = df.iloc[:31]
             df.to_csv(save_location, index=False)
             return df.head()
         raise Exception("Data not found")
