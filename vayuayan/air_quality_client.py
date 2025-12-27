@@ -610,25 +610,64 @@ class CPCBLive:
 
 
 class PM25Client:
-    """Client for processing PM2.5 satellite data from NetCDF files."""
+    """Client for processing PM2.5 satellite data from NetCDF files.
 
-    def __init__(self, cache_dir: str = "pm25_data") -> None:
+    Supports both V5.GL.05.02 (GWR-based) and V6.GL.02.04 (CNN-based) datasets
+    from the WUSTL Atmospheric Composition Analysis Group (ACAG).
+    """
+
+    def __init__(self, version: str = "V6", cache_dir: str = "pm25_data") -> None:
         """Initialize the PM2.5 Client with data paths and AWS configuration.
 
         Args:
+            version: Dataset version to use. Options:
+                - "V6" (default): V6.GL.02.04 - CNN-based algorithm (1998-2023)
+                  Most advanced, recommended for new studies
+                - "V5": V5.GL.05.02 - GWR-based algorithm (1998-2024)
+                  Traditional approach, compatible with published studies
             cache_dir: Directory to cache downloaded NetCDF files.
+
+        Raises:
+            ValueError: If version is not "V5" or "V6".
+
+        Example:
+            >>> # Use V6 (default, recommended)
+            >>> client = PM25Client()
+
+            >>> # Use V5 for compatibility with existing studies
+            >>> client = PM25Client(version="V5")
         """
+        if version not in ["V5", "V6"]:
+            raise ValueError(
+                f"Invalid version: {version}. Must be 'V5' or 'V6'. "
+                f"V6 (default) is recommended for new studies."
+            )
+
+        self.version = version
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-        # AWS S3 configuration for WUSTL ACAG data (Global)
-        self.aws_base_url = (
-            "https://s3.us-west-2.amazonaws.com/v6.gl.02.04/V6.GL.02.04/GL/"
-        )
+        # Configure data source based on version
+        if version == "V6":
+            # V6.GL.02.04: CNN-based algorithm (most advanced)
+            # Source: AWS S3 Open Data Registry
+            self.aws_base_url = (
+                "https://s3.us-west-2.amazonaws.com/v6.gl.02.04/V6.GL.02.04/GL/"
+            )
+            self.variable_name = "PM25"  # V6 uses "PM25"
+            self.year_range = (1998, 2023)
+        else:  # V5
+            # V5.GL.05.02: GWR-based algorithm (traditional, well-validated)
+            # Source: AWS S3 (same bucket structure as V6)
+            self.aws_base_url = (
+                "https://s3.us-west-2.amazonaws.com/acag-data/V5.GL.05.02/GL/"
+            )
+            self.variable_name = "GWRPM25"  # V5 uses "GWRPM25"
+            self.year_range = (1998, 2024)
 
         # Local paths (legacy support)
-        self.annual_data_path = "examples/V6GL01.0p10.CNNPM25.Global"
-        self.monthly_data_path = "examples/V6GL01.0p10.CNNPM25.Global"
+        self.annual_data_path = f"examples/{version}GL01.0p10.PM25.Global"
+        self.monthly_data_path = f"examples/{version}GL01.0p10.PM25.Global"
 
     def _get_aws_filename(self, year: int, month: Optional[int] = None) -> str:
         """Generate AWS filename for given year and optional month.
@@ -639,10 +678,27 @@ class PM25Client:
 
         Returns:
             AWS filename for the NetCDF file.
+
+        Raises:
+            ValueError: If year is outside valid range for the version.
         """
-        if month is None:
-            return f"V6GL02.04.CNNPM25.GL.{year}01-{year}12.nc"
-        return f"V6GL02.04.CNNPM25.GL.{year}{month:02d}-{year}{month:02d}.nc"
+        # Validate year range
+        if not (self.year_range[0] <= year <= self.year_range[1]):
+            raise ValueError(
+                f"Year {year} is outside valid range for {self.version}: "
+                f"{self.year_range[0]}-{self.year_range[1]}"
+            )
+
+        if self.version == "V6":
+            # V6 filename pattern: V6GL02.04.CNNPM25.GL.YYYYMM-YYYYMM.nc
+            if month is None:
+                return f"V6GL02.04.CNNPM25.GL.{year}01-{year}12.nc"
+            return f"V6GL02.04.CNNPM25.GL.{year}{month:02d}-{year}{month:02d}.nc"
+        else:  # V5
+            # V5 filename pattern: V5GL05.02.GWRPM25.GL.YYYYMM-YYYYMM.nc
+            if month is None:
+                return f"V5GL05.02.GWRPM25.GL.{year}01-{year}12.nc"
+            return f"V5GL05.02.GWRPM25.GL.{year}{month:02d}-{year}{month:02d}.nc"
 
     def _get_aws_url(self, year: int, month: Optional[int] = None) -> str:
         """Generate AWS URL for given year and optional month.
@@ -706,7 +762,7 @@ class PM25Client:
 
         # Download from AWS
         aws_url = self._get_aws_url(year, month)
-        print("Downloading PM2.5 data from AWS...")
+        print(f"Downloading PM2.5 data ({self.version}) from AWS...")
         print(f"Source: {aws_url}")
         print(f"Destination: {cached_path}")
 
