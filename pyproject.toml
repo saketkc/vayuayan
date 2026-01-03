@@ -41,7 +41,9 @@ dependencies = [
     "rioxarray>=0.15.0",
     "xarray>=2024.7.0",
     "netCDF4>=1.7.2",
-    "tqdm>=4.62.0"
+    "tqdm>=4.62.0",
+    "earthengine-api>=0.1.384",
+    "boto3>=1.26.0"
 ]
 
 [project.optional-dependencies]
