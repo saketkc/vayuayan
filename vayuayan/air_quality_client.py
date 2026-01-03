@@ -692,9 +692,18 @@ class PM25Client:
         self.gee_initialized = False
         if GEE_AVAILABLE and self.gee_collection_monthly:
             try:
-                ee.Initialize()
-                self.gee_initialized = True
-                print("✓ Google Earth Engine initialized")
+                # Try new high-volume endpoint first (recommended for server use)
+                try:
+                    ee.Initialize(
+                        opt_url="https://earthengine-highvolume.googleapis.com"
+                    )
+                    self.gee_initialized = True
+                    print("✓ Google Earth Engine initialized (high-volume endpoint)")
+                except Exception:
+                    # Fall back to standard endpoint
+                    ee.Initialize()
+                    self.gee_initialized = True
+                    print("✓ Google Earth Engine initialized")
             except Exception as e:
                 print(f"ℹ GEE not authenticated: {e}")
                 print("  Run 'earthengine authenticate' to enable GEE data source")
@@ -702,6 +711,12 @@ class PM25Client:
         # Local paths (legacy support)
         self.annual_data_path = f"examples/{version}GL01.0p10.PM25.Global"
         self.monthly_data_path = f"examples/{version}GL01.0p10.PM25.Global"
+
+        # Box shared folder URLs for manual downloads
+        if version == "V6":
+            self.box_shared_folder = "https://wustl.box.com/v/ACAG-V6GL0204-CNNPM25"
+        else:  # V5
+            self.box_shared_folder = "https://wustl.box.com/v/ACAG-V5GL0502-GWRPM25"
 
     def _get_aws_filename(self, year: int, month: Optional[int] = None) -> str:
         """Generate AWS filename for given year and optional month.
