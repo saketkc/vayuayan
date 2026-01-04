@@ -5,6 +5,8 @@ This module contains URL endpoints, headers, timeouts, and other configuration
 constants used throughout the vayuayan package.
 """
 
+import os
+from pathlib import Path
 from typing import Dict, List
 
 # Base URLs
@@ -98,4 +100,31 @@ SUPPORTED_FILE_EXTENSIONS: List[str] = [".csv", ".xlsx", ".xls", ".json"]
 
 # Default File Paths
 DEFAULT_DOWNLOAD_DIR: str = "downloads"
-DEFAULT_CONFIG_DIR: str = ".vayuayan"
+
+
+def get_config_dir() -> Path:
+    """Get the standard configuration directory for vayuayan.
+
+    Returns:
+        Path: Platform-specific config directory
+            - Linux/macOS: ~/.config/vayuayan
+            - Windows: ~/AppData/Local/vayuayan
+    """
+    import platform
+
+    home = Path.home()
+
+    if platform.system() == "Windows":
+        config_base = home / "AppData" / "Local"
+    else:
+        config_base = Path(os.environ.get("XDG_CONFIG_HOME", home / ".config"))
+
+    config_dir = config_base / "vayuayan"
+    config_dir.mkdir(parents=True, exist_ok=True)
+
+    return config_dir
+
+
+def get_gee_project_file() -> Path:
+    """Get the path to the GEE project configuration file."""
+    return get_config_dir() / "gee_project"

@@ -41,8 +41,134 @@ try:
 except ImportError:
     BOTO3_AVAILABLE = False
 
+from .constants import get_gee_project_file
+
 # Disable SSL warnings for CPCB endpoints with certificate issues
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+
+def setup_earth_engine(project_id: Optional[str] = None) -> bool:
+    """Set up Google Earth Engine with a Cloud project.
+
+    This is a user-friendly helper to set up Earth Engine authentication
+    and save the project ID for future use.
+
+    Args:
+        project_id: Optional Google Cloud project ID. If not provided,
+                   will prompt the user to enter it.
+
+    Returns:
+        True if setup succeeded, False otherwise.
+
+    Example:
+        >>> from vayuayan import setup_earth_engine
+        >>> setup_earth_engine()
+        # Follow the prompts to enter your project ID
+    """
+    if not GEE_AVAILABLE:
+        print("✗ Earth Engine library not installed")
+        print("  Install it with: pip install earthengine-api")
+        return False
+
+    print("=" * 70)
+    print("Google Earth Engine Setup")
+    print("=" * 70)
+    print()
+
+    # Check if already authenticated
+    if project_id:
+        print(f"Using project ID: {project_id}")
+    else:
+        try:
+            # Try to initialize without project to check auth status
+            ee.Initialize()
+            print("✓ Already authenticated!")
+            print("\nNote: You still need a project ID for the new API.")
+            print("Visit https://code.earthengine.google.com/ to register.")
+            print()
+        except Exception:
+            pass
+
+        print("STEP-BY-STEP INSTRUCTIONS:")
+        print("-" * 70)
+        print()
+        print("1. Open this URL in your browser:")
+        print("   https://code.earthengine.google.com/")
+        print()
+        print("2. Click 'Register a Noncommercial or Commercial Cloud project'")
+        print()
+        print("3. Select or create a Google Cloud project")
+        print("   - If you don't have one, it will create one for you")
+        print("   - Choose 'Noncommercial' (free for research/education)")
+        print()
+        print("4. Copy the project ID (e.g., 'ee-myproject123')")
+        print()
+        print("-" * 70)
+        print()
+
+        try:
+            project_id = input("Enter your Google Cloud project ID: ").strip()
+        except (KeyboardInterrupt, EOFError):
+            print("\n\nSetup cancelled.")
+            return False
+
+        if not project_id:
+            print("\n✗ No project ID provided. Exiting.")
+            return False
+
+    print(f"\nUsing project: {project_id}")
+    print("\nAuthenticating with Earth Engine...")
+    print("(A browser window will open for authentication)")
+    print()
+
+    try:
+        # Authenticate
+        ee.Authenticate(force=True)
+
+        # Try to initialize with the project
+        print(f"\nInitializing Earth Engine with project '{project_id}'...")
+        ee.Initialize(project=project_id)
+
+        # Test access
+        print("\nTesting data access...")
+        collection = ee.ImageCollection(
+            "projects/sat-io/open-datasets/GLOBAL-SATELLITE-PM25/MONTHLY"
+        )
+        count = collection.size().getInfo()
+
+        print("\n" + "=" * 70)
+        print("✓ SUCCESS!")
+        print("=" * 70)
+        print(f"\n✓ Earth Engine authenticated with project: {project_id}")
+        print(f"✓ Can access PM2.5 data collection ({count} images)")
+
+        gee_project_file = get_gee_project_file()
+        gee_project_file.write_text(project_id)
+        print(f"✓ Project ID saved to {gee_project_file}")
+
+        print()
+        print("You can now use PM25Client to download data!")
+        print()
+        print("Example:")
+        print("  >>> from vayuayan import PM25Client")
+        print("  >>> client = PM25Client()")
+        print("  >>> data = client.get_pm25_at_point(28.6139, 77.2090, 2020, 1)")
+        print()
+
+        return True
+
+    except KeyboardInterrupt:
+        print("\n\nSetup cancelled.")
+        return False
+    except Exception as e:
+        print(f"\n✗ Error: {e}")
+        print()
+        print("Troubleshooting:")
+        print("1. Make sure you registered at https://code.earthengine.google.com/")
+        print("2. Verify your project ID is correct")
+        print("3. Wait a few minutes for permissions to propagate")
+        print("4. Try running setup_earth_engine() again")
+        return False
 
 
 def _request_with_ssl_fallback(
@@ -691,22 +817,7 @@ class PM25Client:
         # Initialize GEE if available
         self.gee_initialized = False
         if GEE_AVAILABLE and self.gee_collection_monthly:
-            try:
-                # Try new high-volume endpoint first (recommended for server use)
-                try:
-                    ee.Initialize(
-                        opt_url="https://earthengine-highvolume.googleapis.com"
-                    )
-                    self.gee_initialized = True
-                    print("✓ Google Earth Engine initialized (high-volume endpoint)")
-                except Exception:
-                    # Fall back to standard endpoint
-                    ee.Initialize()
-                    self.gee_initialized = True
-                    print("✓ Google Earth Engine initialized")
-            except Exception as e:
-                print(f"ℹ GEE not authenticated: {e}")
-                print("  Run 'earthengine authenticate' to enable GEE data source")
+            self.gee_initialized = self._initialize_gee()
 
         # Local paths (legacy support)
         self.annual_data_path = f"examples/{version}GL01.0p10.PM25.Global"
@@ -717,6 +828,91 @@ class PM25Client:
             self.box_shared_folder = "https://wustl.box.com/v/ACAG-V6GL0204-CNNPM25"
         else:  # V5
             self.box_shared_folder = "https://wustl.box.com/v/ACAG-V5GL0502-GWRPM25"
+
+    def _initialize_gee(self) -> bool:
+        """Initialize Google Earth Engine with automatic project detection and setup.
+
+        Returns:
+            True if initialization succeeded, False otherwise.
+        """
+        try:
+            gee_project = os.environ.get("GOOGLE_CLOUD_PROJECT") or os.environ.get(
+                "GEE_PROJECT"
+            )
+
+            if not gee_project:
+                gee_project_file = get_gee_project_file()
+                if gee_project_file.exists():
+                    gee_project = gee_project_file.read_text().strip()
+                else:
+                    legacy_file = Path(".gee_project")
+                    if legacy_file.exists():
+                        gee_project = legacy_file.read_text().strip()
+                        try:
+                            gee_project_file.write_text(gee_project)
+                            print(f"✓ Migrated config to {gee_project_file}")
+                        except Exception:
+                            pass
+
+            if gee_project:
+                try:
+                    ee.Initialize(
+                        project=gee_project,
+                        opt_url="https://earthengine-highvolume.googleapis.com",
+                    )
+                    print(f"✓ Google Earth Engine initialized (project: {gee_project}, high-volume)")
+                    return True
+                except Exception:
+                    pass
+
+                try:
+                    ee.Initialize(project=gee_project)
+                    print(f"✓ Google Earth Engine initialized (project: {gee_project})")
+                    return True
+                except Exception:
+                    pass
+
+            try:
+                ee.Initialize(project="earthengine-legacy")
+                print("✓ Google Earth Engine initialized (earthengine-legacy)")
+                return True
+            except Exception:
+                pass
+
+            try:
+                ee.Initialize()
+                print("✓ Google Earth Engine initialized")
+                return True
+            except Exception:
+                pass
+
+            print("\n" + "=" * 70)
+            print("Google Earth Engine Setup Required")
+            print("=" * 70)
+            print("\nTo download PM2.5 data from Google Earth Engine, you need to:")
+            print()
+            print("1. Register at: https://code.earthengine.google.com/")
+            print("   - Click 'Register a Noncommercial or Commercial Cloud project'")
+            print("   - Select 'Noncommercial' (free for research/education)")
+            print("   - Create or select a Google Cloud project")
+            print()
+            print("2. Set up authentication:")
+            print("   Run this in Python:")
+            print()
+            print("   >>> from vayuayan import setup_earth_engine")
+            print("   >>> setup_earth_engine()")
+            print()
+            print("   Or set your project ID:")
+            print("   export GEE_PROJECT=your-project-id")
+            print()
+            print("=" * 70)
+            print()
+
+            return False
+
+        except Exception as e:
+            print(f"ℹ GEE initialization failed: {e}")
+            return False
 
     def _get_aws_filename(self, year: int, month: Optional[int] = None) -> str:
         """Generate AWS filename for given year and optional month.
@@ -882,9 +1078,11 @@ class PM25Client:
                 return None
 
             # If no region specified, use India bounds as default
-            # (covers typical use case and avoids global download size limits)
+            # This downloads the full India raster once and caches it,
+            # allowing all stations to extract their values from the same file
+            # (more efficient than downloading separate clips for each station)
             if region is None:
-                print("ℹ No region specified, clipping to India bounds (default)")
+                print("ℹ Downloading India region raster (will be cached for reuse)")
                 region = ee.Geometry.Rectangle([68.0, 8.0, 98.0, 37.0])  # India
 
             image = image.clip(region)
@@ -988,7 +1186,7 @@ class PM25Client:
             force_download: Whether to re-download even if file exists.
 
         Returns:
-            Path to the downloaded NetCDF file.
+            Path to the downloaded NetCDF or GeoTIFF file.
 
         Raises:
             requests.RequestException: If download fails.
@@ -996,6 +1194,10 @@ class PM25Client:
         """
         cached_path = Path(self.get_netcdf_path(year, month))
 
+        # Also check for GeoTIFF version (from GEE downloads)
+        cached_tif_path = cached_path.with_suffix(".tif")
+
+        # Check if NetCDF file exists
         if cached_path.exists() and not force_download:
             file_size = cached_path.stat().st_size
             if file_size > 1024 * 1024:  # At least 1MB (reasonable for NetCDF)
@@ -1003,6 +1205,13 @@ class PM25Client:
                 return str(cached_path)
             else:
                 print("Warning: Cached file appears incomplete, re-downloading...")
+
+        # Check if GeoTIFF file exists (from previous GEE download)
+        if cached_tif_path.exists() and not force_download:
+            file_size = cached_tif_path.stat().st_size
+            if file_size > 100 * 1024:  # At least 100KB (reasonable for GeoTIFF)
+                print(f"Using cached GeoTIFF file: {cached_tif_path}")
+                return str(cached_tif_path)
 
         cached_path.parent.mkdir(parents=True, exist_ok=True)
 
