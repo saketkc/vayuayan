@@ -860,7 +860,9 @@ class PM25Client:
                         project=gee_project,
                         opt_url="https://earthengine-highvolume.googleapis.com",
                     )
-                    print(f"✓ Google Earth Engine initialized (project: {gee_project}, high-volume)")
+                    print(
+                        f"✓ Google Earth Engine initialized (project: {gee_project}, high-volume)"
+                    )
                     return True
                 except Exception:
                     pass

@@ -14,8 +14,10 @@ from vayuayan.utils import (
 @pytest.mark.parametrize(
     "raw,expected",
     [
-        ("Dr. Karni Singh Shooting Range, Delhi - DPCC",
-         "Dr_Karni_Singh_Shooting_Range_Delhi_DPCC"),
+        (
+            "Dr. Karni Singh Shooting Range, Delhi - DPCC",
+            "Dr_Karni_Singh_Shooting_Range_Delhi_DPCC",
+        ),
         ("ITO, Delhi - DPCC", "ITO_Delhi_DPCC"),
         ("  spaced   out  ", "spaced_out"),
         ("", ""),
