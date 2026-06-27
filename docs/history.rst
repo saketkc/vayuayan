@@ -3,6 +3,12 @@ History
 
 Release history and changelog for vayuayan.
 
+v0.1.5 (2026-06-27)
+------------------
+
+* Added Google Earth Engine fallback for PM2.5 data when AWS S3 returns 403, with automatic GEE project detection and ``setup_earth_engine()`` helper
+* Added support for V5 (V5.GL.05.02, GWR-based) WUSTL ACAG data alongside the default V6
+
 v0.1.4 (2025-11-30)
 ------------------
 

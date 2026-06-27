@@ -18,7 +18,7 @@ Usage:
     >>> location = live.get_system_location()
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.5"
 __author__ = "Saket Choudhary"
 __email__ = "saketc@iitb.ac.in"
 __description__ = (

@@ -97,6 +97,7 @@ intersphinx_mapping = {
 html_theme = "furo"
 html_static_path = ["_static"]
 html_css_files = ["css/custom.css"]
+html_baseurl = "https://vayuayan.saketlab.org/"
 
 # Logo configuration
 html_logo = "assets/vayuayan.png"

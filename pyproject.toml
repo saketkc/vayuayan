@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=45", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "vayuayan"
-version = "0.1.4"
+dynamic = ["version"]
 description = "Package for fetching and analyzing air quality data from multiple sources"
 readme = "README.md"
 license = "MIT"
@@ -70,7 +70,7 @@ notebooks = [
 [project.urls]
 Homepage = "https://github.com/saketlab/vayuayan"
 Repository = "https://github.com/saketlab/vayuayan.git"
-Documentation = "https://saketlab.github.io/vayuayan"
+Documentation = "https://vayuayan.saketlab.org"
 "Bug Tracker" = "https://github.com/saketlab/vayuayan/issues"
 
 [project.scripts]
@@ -78,6 +78,9 @@ vayuayan = "vayuayan.cli:main"
 
 [tool.setuptools]
 packages = ["vayuayan"]
+
+[tool.setuptools.dynamic]
+version = {attr = "vayuayan.__version__"}
 
 [tool.setuptools.package-data]
 vayuayan = ["py.typed"]
