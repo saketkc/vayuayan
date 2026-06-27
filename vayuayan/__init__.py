@@ -18,7 +18,7 @@ Usage:
     >>> location = live.get_system_location()
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.5"
 __author__ = "Saket Choudhary"
 __email__ = "saketc@iitb.ac.in"
 __description__ = (
@@ -28,8 +28,11 @@ __description__ = (
 __url__ = "https://github.com/saketlab/vayuayan"
 
 # Import main client classes
-from .air_quality_client import CPCBHistorical, CPCBLive, PM25Client
+from .air_quality_client import CPCBHistorical, CPCBLive, PM25Client, setup_earth_engine
 from .client import CPCBClient
+
+# Import configuration helpers
+from .constants import get_config_dir, get_gee_project_file
 
 # Import exceptions for convenience
 from .exceptions import (
@@ -62,6 +65,10 @@ __all__ = [
     "CPCBHistorical",
     "CPCBLive",
     "PM25Client",
+    # Setup helpers
+    "setup_earth_engine",
+    "get_config_dir",
+    "get_gee_project_file",
     # Exceptions
     "CPCBError",
     "NetworkError",

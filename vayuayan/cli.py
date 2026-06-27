@@ -153,6 +153,16 @@ Examples:
             "(e.g., 'state_name,district_name')."
         ),
     )
+    pm25_parser.add_argument(
+        "--version",
+        type=str,
+        choices=["V5", "V6"],
+        default="V6",
+        help=(
+            "Dataset version: V5 (GWR, 1998-2024) or V6 (CNN, 1998-2023, default). "
+            "V6 recommended for new studies."
+        ),
+    )
 
     args = parser.parse_args()
 
@@ -160,10 +170,15 @@ Examples:
         parser.print_help()
         sys.exit(1)
 
-    # Initialize client
+    # Initialize clients
     aqi_client = CPCBHistorical()
     live_aqi_client = CPCBLive()
-    pm25_client = PM25Client()
+
+    # PM25Client initialization with version (if pm25 command)
+    if args.command == "pm25":
+        pm25_client = PM25Client(version=args.version)
+    else:
+        pm25_client = PM25Client()  # Default version for other commands
 
     # Execute command
     try:

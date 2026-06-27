@@ -9,6 +9,7 @@ and PM2.5 satellite data.
 import base64
 import json
 import os
+import zipfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union, cast
@@ -24,8 +25,150 @@ import xarray as xr
 from geopy.distance import geodesic
 from tqdm import tqdm
 
+try:
+    import ee
+
+    GEE_AVAILABLE = True
+except ImportError:
+    GEE_AVAILABLE = False
+
+try:
+    import boto3
+    from botocore import UNSIGNED
+    from botocore.config import Config
+
+    BOTO3_AVAILABLE = True
+except ImportError:
+    BOTO3_AVAILABLE = False
+
+from .constants import get_gee_project_file
+
 # Disable SSL warnings for CPCB endpoints with certificate issues
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+
+def setup_earth_engine(project_id: Optional[str] = None) -> bool:
+    """Set up Google Earth Engine with a Cloud project.
+
+    This is a user-friendly helper to set up Earth Engine authentication
+    and save the project ID for future use.
+
+    Args:
+        project_id: Optional Google Cloud project ID. If not provided,
+                   will prompt the user to enter it.
+
+    Returns:
+        True if setup succeeded, False otherwise.
+
+    Example:
+        >>> from vayuayan import setup_earth_engine
+        >>> setup_earth_engine()
+        # Follow the prompts to enter your project ID
+    """
+    if not GEE_AVAILABLE:
+        print("✗ Earth Engine library not installed")
+        print("  Install it with: pip install earthengine-api")
+        return False
+
+    print("=" * 70)
+    print("Google Earth Engine Setup")
+    print("=" * 70)
+    print()
+
+    # Check if already authenticated
+    if project_id:
+        print(f"Using project ID: {project_id}")
+    else:
+        try:
+            # Try to initialize without project to check auth status
+            ee.Initialize()
+            print("✓ Already authenticated!")
+            print("\nNote: You still need a project ID for the new API.")
+            print("Visit https://code.earthengine.google.com/ to register.")
+            print()
+        except Exception:
+            pass
+
+        print("STEP-BY-STEP INSTRUCTIONS:")
+        print("-" * 70)
+        print()
+        print("1. Open this URL in your browser:")
+        print("   https://code.earthengine.google.com/")
+        print()
+        print("2. Click 'Register a Noncommercial or Commercial Cloud project'")
+        print()
+        print("3. Select or create a Google Cloud project")
+        print("   - If you don't have one, it will create one for you")
+        print("   - Choose 'Noncommercial' (free for research/education)")
+        print()
+        print("4. Copy the project ID (e.g., 'ee-myproject123')")
+        print()
+        print("-" * 70)
+        print()
+
+        try:
+            project_id = input("Enter your Google Cloud project ID: ").strip()
+        except (KeyboardInterrupt, EOFError):
+            print("\n\nSetup cancelled.")
+            return False
+
+        if not project_id:
+            print("\n✗ No project ID provided. Exiting.")
+            return False
+
+    print(f"\nUsing project: {project_id}")
+    print("\nAuthenticating with Earth Engine...")
+    print("(A browser window will open for authentication)")
+    print()
+
+    try:
+        # Authenticate
+        ee.Authenticate(force=True)
+
+        # Try to initialize with the project
+        print(f"\nInitializing Earth Engine with project '{project_id}'...")
+        ee.Initialize(project=project_id)
+
+        # Test access
+        print("\nTesting data access...")
+        collection = ee.ImageCollection(
+            "projects/sat-io/open-datasets/GLOBAL-SATELLITE-PM25/MONTHLY"
+        )
+        count = collection.size().getInfo()
+
+        print("\n" + "=" * 70)
+        print("✓ SUCCESS!")
+        print("=" * 70)
+        print(f"\n✓ Earth Engine authenticated with project: {project_id}")
+        print(f"✓ Can access PM2.5 data collection ({count} images)")
+
+        gee_project_file = get_gee_project_file()
+        gee_project_file.write_text(project_id)
+        print(f"✓ Project ID saved to {gee_project_file}")
+
+        print()
+        print("You can now use PM25Client to download data!")
+        print()
+        print("Example:")
+        print("  >>> from vayuayan import PM25Client")
+        print("  >>> client = PM25Client()")
+        print("  >>> data = client.get_pm25_at_point(28.6139, 77.2090, 2020, 1)")
+        print()
+
+        return True
+
+    except KeyboardInterrupt:
+        print("\n\nSetup cancelled.")
+        return False
+    except Exception as e:
+        print(f"\n✗ Error: {e}")
+        print()
+        print("Troubleshooting:")
+        print("1. Make sure you registered at https://code.earthengine.google.com/")
+        print("2. Verify your project ID is correct")
+        print("3. Wait a few minutes for permissions to propagate")
+        print("4. Try running setup_earth_engine() again")
+        return False
 
 
 def _request_with_ssl_fallback(
@@ -71,25 +214,31 @@ def _request_with_ssl_fallback(
     if cookies:
         request_kwargs["cookies"] = cookies
 
-    # Try with SSL verification first
     try:
         request_kwargs["verify"] = True
         if method.lower() == "get":
-            response = requests.get(url, **request_kwargs)
+            response = requests.get(
+                url, **request_kwargs
+            )  # nosec B113 - timeout in request_kwargs
         else:
-            response = requests.post(url, **request_kwargs)
+            response = requests.post(
+                url, **request_kwargs
+            )  # nosec B113 - timeout in request_kwargs
         response.raise_for_status()
         return response
     except requests.exceptions.SSLError as e:
-        # SSL verification failed, retry without verification
         print(f"SSL verification failed: {e}")
         print("Retrying with SSL verification disabled...")
         try:
             request_kwargs["verify"] = False
             if method.lower() == "get":
-                response = requests.get(url, **request_kwargs)
+                response = requests.get(
+                    url, **request_kwargs
+                )  # nosec B113 - timeout in request_kwargs
             else:
-                response = requests.post(url, **request_kwargs)
+                response = requests.post(
+                    url, **request_kwargs
+                )  # nosec B113 - timeout in request_kwargs
             response.raise_for_status()
             return response
         except Exception as fallback_error:
@@ -324,7 +473,6 @@ class CPCBHistorical:
         complete_list = self.get_complete_list()
         station_list = complete_list.get("stations", [])
 
-        # Find station name for the given station_id
         station_name = None
         for city_stations in station_list.values():
             for station in city_stations:
@@ -584,7 +732,6 @@ class CPCBLive:
             ValueError: If hour is invalid.
             Exception: If data retrieval fails.
         """
-        # Determine station_id
         if not station_id:
             if coords:
                 station_id = self.get_nearest_station(coords)[0]
@@ -592,7 +739,6 @@ class CPCBLive:
                 system_coords = self.get_system_location()
                 station_id = self.get_nearest_station(system_coords)[0]
 
-        # Determine date and hour
         now = datetime.now()
         if not date:
             date = now.strftime("%Y-%m-%d")
@@ -610,25 +756,173 @@ class CPCBLive:
 
 
 class PM25Client:
-    """Client for processing PM2.5 satellite data from NetCDF files."""
+    """Client for processing PM2.5 satellite data from NetCDF files.
 
-    def __init__(self, cache_dir: str = "pm25_data") -> None:
+    Supports both V5.GL.05.02 (GWR-based) and V6.GL.02.04 (CNN-based) datasets
+    from the WUSTL Atmospheric Composition Analysis Group (ACAG).
+    """
+
+    def __init__(self, version: str = "V6", cache_dir: str = "pm25_data") -> None:
         """Initialize the PM2.5 Client with data paths and AWS configuration.
 
         Args:
+            version: Dataset version to use. Options:
+                - "V6" (default): V6.GL.02.04 - CNN-based algorithm (1998-2023)
+                  Most advanced, recommended for new studies
+                - "V5": V5.GL.05.02 - GWR-based algorithm (1998-2024)
+                  Traditional approach, compatible with published studies
             cache_dir: Directory to cache downloaded NetCDF files.
+
+        Raises:
+            ValueError: If version is not "V5" or "V6".
+
+        Example:
+            >>> # Use V6 (default, recommended)
+            >>> client = PM25Client()
+
+            >>> # Use V5
+            >>> client = PM25Client(version="V5")
         """
+        if version not in ["V5", "V6"]:
+            raise ValueError(
+                f"Invalid version: {version}. Must be 'V5' or 'V6'. "
+                f"V6 (default) is recommended for new studies."
+            )
+
+        self.version = version
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-        # AWS S3 configuration for WUSTL ACAG data (Global)
-        self.aws_base_url = (
-            "https://s3.us-west-2.amazonaws.com/v6.gl.02.04/V6.GL.02.04/GL/"
-        )
+        # Configure data source based on version
+        if version == "V6":
+            # V6.GL.02.04: CNN-based algorithm (most advanced)
+            # Primary: AWS S3 Open Data Registry
+            self.aws_base_url = (
+                "https://s3.us-west-2.amazonaws.com/v6.gl.02.04/V6.GL.02.04/GL/"
+            )
+            # GEE Fallback: Google Earth Engine Community Catalog (V6.GL.02, 2000-2022)
+            self.gee_collection_monthly = (
+                "projects/sat-io/open-datasets/GLOBAL-SATELLITE-PM25/MONTHLY"
+            )
+            self.gee_collection_annual = (
+                "projects/sat-io/open-datasets/GLOBAL-SATELLITE-PM25/ANNUAL"
+            )
+            self.variable_name = "PM25"  # V6 uses "PM25"
+            self.year_range = (1998, 2023)
+            self.gee_year_range = (2000, 2022)  # GEE has limited range
+        else:  # V5
+            # V5.GL.05.02: GWR-based algorithm (traditional, well-validated)
+            self.aws_base_url = (
+                "https://s3.us-west-2.amazonaws.com/acag-data/V5.GL.05.02/GL/"
+            )
+            # V5 not available on GEE
+            self.gee_collection_monthly = None
+            self.gee_collection_annual = None
+            self.variable_name = "GWRPM25"  # V5 uses "GWRPM25"
+            self.year_range = (1998, 2024)
+            self.gee_year_range = None
+
+        # Initialize GEE if available
+        self.gee_initialized = False
+        if GEE_AVAILABLE and self.gee_collection_monthly:
+            self.gee_initialized = self._initialize_gee()
 
         # Local paths (legacy support)
-        self.annual_data_path = "examples/V6GL01.0p10.CNNPM25.Global"
-        self.monthly_data_path = "examples/V6GL01.0p10.CNNPM25.Global"
+        self.annual_data_path = f"examples/{version}GL01.0p10.PM25.Global"
+        self.monthly_data_path = f"examples/{version}GL01.0p10.PM25.Global"
+
+        # Box shared folder URLs for manual downloads
+        if version == "V6":
+            self.box_shared_folder = "https://wustl.box.com/v/ACAG-V6GL0204-CNNPM25"
+        else:  # V5
+            self.box_shared_folder = "https://wustl.box.com/v/ACAG-V5GL0502-GWRPM25"
+
+    def _initialize_gee(self) -> bool:
+        """Initialize Google Earth Engine with automatic project detection and setup.
+
+        Returns:
+            True if initialization succeeded, False otherwise.
+        """
+        try:
+            gee_project = os.environ.get("GOOGLE_CLOUD_PROJECT") or os.environ.get(
+                "GEE_PROJECT"
+            )
+
+            if not gee_project:
+                gee_project_file = get_gee_project_file()
+                if gee_project_file.exists():
+                    gee_project = gee_project_file.read_text().strip()
+                else:
+                    legacy_file = Path(".gee_project")
+                    if legacy_file.exists():
+                        gee_project = legacy_file.read_text().strip()
+                        try:
+                            gee_project_file.write_text(gee_project)
+                            print(f"✓ Migrated config to {gee_project_file}")
+                        except Exception:
+                            pass
+
+            if gee_project:
+                try:
+                    ee.Initialize(
+                        project=gee_project,
+                        opt_url="https://earthengine-highvolume.googleapis.com",
+                    )
+                    print(
+                        f"✓ Google Earth Engine initialized (project: {gee_project}, high-volume)"
+                    )
+                    return True
+                except Exception:
+                    pass
+
+                try:
+                    ee.Initialize(project=gee_project)
+                    print(f"✓ Google Earth Engine initialized (project: {gee_project})")
+                    return True
+                except Exception:
+                    pass
+
+            try:
+                ee.Initialize(project="earthengine-legacy")
+                print("✓ Google Earth Engine initialized (earthengine-legacy)")
+                return True
+            except Exception:
+                pass
+
+            try:
+                ee.Initialize()
+                print("✓ Google Earth Engine initialized")
+                return True
+            except Exception:
+                pass
+
+            print("\n" + "=" * 70)
+            print("Google Earth Engine Setup Required")
+            print("=" * 70)
+            print("\nTo download PM2.5 data from Google Earth Engine, you need to:")
+            print()
+            print("1. Register at: https://code.earthengine.google.com/")
+            print("   - Click 'Register a Noncommercial or Commercial Cloud project'")
+            print("   - Select 'Noncommercial' (free for research/education)")
+            print("   - Create or select a Google Cloud project")
+            print()
+            print("2. Set up authentication:")
+            print("   Run this in Python:")
+            print()
+            print("   >>> from vayuayan import setup_earth_engine")
+            print("   >>> setup_earth_engine()")
+            print()
+            print("   Or set your project ID:")
+            print("   export GEE_PROJECT=your-project-id")
+            print()
+            print("=" * 70)
+            print()
+
+            return False
+
+        except Exception as e:
+            print(f"ℹ GEE initialization failed: {e}")
+            return False
 
     def _get_aws_filename(self, year: int, month: Optional[int] = None) -> str:
         """Generate AWS filename for given year and optional month.
@@ -639,10 +933,26 @@ class PM25Client:
 
         Returns:
             AWS filename for the NetCDF file.
+
+        Raises:
+            ValueError: If year is outside valid range for the version.
         """
-        if month is None:
-            return f"V6GL02.04.CNNPM25.GL.{year}01-{year}12.nc"
-        return f"V6GL02.04.CNNPM25.GL.{year}{month:02d}-{year}{month:02d}.nc"
+        if not (self.year_range[0] <= year <= self.year_range[1]):
+            raise ValueError(
+                f"Year {year} is outside valid range for {self.version}: "
+                f"{self.year_range[0]}-{self.year_range[1]}"
+            )
+
+        if self.version == "V6":
+            # V6 filename pattern: V6GL02.04.CNNPM25.GL.YYYYMM-YYYYMM.nc
+            if month is None:
+                return f"V6GL02.04.CNNPM25.GL.{year}01-{year}12.nc"
+            return f"V6GL02.04.CNNPM25.GL.{year}{month:02d}-{year}{month:02d}.nc"
+        else:  # V5
+            # V5 filename pattern: V5GL05.02.GWRPM25.GL.YYYYMM-YYYYMM.nc
+            if month is None:
+                return f"V5GL05.02.GWRPM25.GL.{year}01-{year}12.nc"
+            return f"V5GL05.02.GWRPM25.GL.{year}{month:02d}-{year}{month:02d}.nc"
 
     def _get_aws_url(self, year: int, month: Optional[int] = None) -> str:
         """Generate AWS URL for given year and optional month.
@@ -658,6 +968,205 @@ class PM25Client:
         if month is None:
             return urljoin(self.aws_base_url, f"Annual/{filename}")
         return urljoin(self.aws_base_url, f"Monthly/{year}/{filename}")
+
+    def _download_from_s3_boto3(
+        self, year: int, month: Optional[int] = None, cached_path: Optional[Path] = None
+    ) -> Optional[str]:
+        """Download PM2.5 data from AWS S3 using boto3 with anonymous access.
+
+        Args:
+            year: Year for data.
+            month: Optional month (1-12). If None, downloads annual data.
+            cached_path: Path where to save the file.
+
+        Returns:
+            Path to downloaded file if successful, None otherwise.
+        """
+        if not BOTO3_AVAILABLE:
+            return None
+
+        if cached_path is None:
+            cached_path = Path(self.get_netcdf_path(year, month))
+
+        try:
+            s3 = boto3.client(
+                "s3", region_name="us-west-2", config=Config(signature_version=UNSIGNED)
+            )
+
+            filename = self._get_aws_filename(year, month)
+            if month is None:
+                s3_key = f"V6.GL.02.04/GL/Annual/{filename}"
+            else:
+                s3_key = f"V6.GL.02.04/GL/Monthly/{year}/{filename}"
+
+            bucket_name = "v6.gl.02.04"
+
+            print(f"Downloading from S3: s3://{bucket_name}/{s3_key}")
+
+            try:
+                head_response = s3.head_object(Bucket=bucket_name, Key=s3_key)
+                total_size = head_response["ContentLength"]
+            except Exception:
+                total_size = 0
+
+            with open(cached_path, "wb") as f:
+                with tqdm(
+                    total=total_size,
+                    unit="B",
+                    unit_scale=True,
+                    unit_divisor=1024,
+                    desc="Downloading (boto3)",
+                    ncols=80,
+                ) as pbar:
+                    s3.download_fileobj(
+                        bucket_name,
+                        s3_key,
+                        f,
+                        Callback=lambda bytes_transferred: pbar.update(
+                            bytes_transferred
+                        ),
+                    )
+
+            final_size = cached_path.stat().st_size
+            print(f"✓ S3 download complete (boto3): {final_size / (1024*1024):.1f} MB")
+            return str(cached_path)
+
+        except Exception as e:
+            print(f"⚠ S3 boto3 download failed: {e}")
+            if cached_path and cached_path.exists():
+                cached_path.unlink()
+            return None
+
+    def _download_from_gee(
+        self,
+        year: int,
+        month: Optional[int] = None,
+        region: Optional[ee.Geometry] = None,
+    ) -> Optional[str]:
+        """Download PM2.5 data from Google Earth Engine.
+
+        Note: GEE has a 32768x32768 pixel download limit. For global data,
+        you must provide a region to clip to, or use the export-to-Drive API.
+
+        Args:
+            year: Year for data.
+            month: Optional month (1-12). If None, downloads annual data.
+            region: Optional ee.Geometry to clip to. If None and image is too large,
+                    will clip to India bounds as fallback.
+
+        Returns:
+            Path to downloaded GeoTIFF file, or None if GEE unavailable.
+
+        Raises:
+            ValueError: If year is outside GEE data range.
+        """
+        if not self.gee_initialized:
+            return None
+
+        if not (self.gee_year_range[0] <= year <= self.gee_year_range[1]):
+            print(
+                f"⚠ Year {year} outside GEE range "
+                f"({self.gee_year_range[0]}-{self.gee_year_range[1]})"
+            )
+            return None
+
+        try:
+            if month is None:
+                collection = ee.ImageCollection(self.gee_collection_annual)
+                date_filter = ee.Filter.calendarRange(year, year, "year")
+            else:
+                collection = ee.ImageCollection(self.gee_collection_monthly)
+                date_filter = ee.Filter.And(
+                    ee.Filter.calendarRange(year, year, "year"),
+                    ee.Filter.calendarRange(month, month, "month"),
+                )
+
+            image = collection.filter(date_filter).first()
+
+            if image is None:
+                print(f"⚠ No GEE data found for {year}-{month or 'annual'}")
+                return None
+
+            # If no region specified, use India bounds as default
+            # This downloads the full India raster once and caches it,
+            # allowing all stations to extract their values from the same file
+            # (more efficient than downloading separate clips for each station)
+            if region is None:
+                print("ℹ Downloading India region raster (will be cached for reuse)")
+                region = ee.Geometry.Rectangle([68.0, 8.0, 98.0, 37.0])  # India
+
+            image = image.clip(region)
+
+            base_filename = self._get_aws_filename(year, month)
+            tif_filename = base_filename.replace(".nc", ".tif")
+            output_path = self.cache_dir / tif_filename
+
+            print(f"Requesting download URL from Google Earth Engine...")
+            print(f"Region: {region.bounds().getInfo()}")
+            url = image.getDownloadURL(
+                {
+                    "scale": 10000,  # ~0.1 degree at equator (0.1° x 0.1° resolution)
+                    "crs": "EPSG:4326",
+                    "fileFormat": "GeoTIFF",
+                    "region": region,
+                }
+            )
+
+            # GEE's getDownloadURL() returns a ZIP archive, not a raw GeoTIFF
+            zip_path = output_path.with_suffix(".zip")
+            print(f"Downloading from GEE...")
+            print(f"Destination: {zip_path}")
+
+            response = requests.get(url, stream=True, timeout=300)
+            response.raise_for_status()
+
+            total_size = int(response.headers.get("content-length", 0))
+
+            with open(zip_path, "wb") as f:
+                with tqdm(
+                    total=total_size,
+                    unit="B",
+                    unit_scale=True,
+                    unit_divisor=1024,
+                    desc="Downloading",
+                    ncols=80,
+                ) as pbar:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        if chunk:
+                            f.write(chunk)
+                            pbar.update(len(chunk))
+
+            final_size = zip_path.stat().st_size
+            print(f"✓ GEE download complete: {final_size / (1024*1024):.1f} MB")
+
+            print(f"Extracting GeoTIFF from ZIP archive...")
+            with zipfile.ZipFile(zip_path, "r") as zip_ref:
+                zip_contents = zip_ref.namelist()
+                print(f"  ZIP contents: {zip_contents}")
+
+                tif_files = [f for f in zip_contents if f.endswith(".tif")]
+                if not tif_files:
+                    raise ValueError(
+                        f"No .tif file found in GEE download: {zip_contents}"
+                    )
+
+                tif_name = tif_files[0]
+                zip_ref.extract(tif_name, self.cache_dir)
+
+                extracted_path = self.cache_dir / tif_name
+                if extracted_path != output_path:
+                    extracted_path.rename(output_path)
+
+            zip_path.unlink()
+
+            print(f"✓ GeoTIFF extracted: {output_path}")
+            return str(output_path)
+
+        except Exception as e:
+            print(f"✗ GEE download failed: {e}")
+            if output_path.exists():
+                output_path.unlink()
+            return None
 
     def get_netcdf_path(self, year: int, month: Optional[int] = None) -> str:
         """Get NetCDF file path for given year and optional month.
@@ -679,7 +1188,7 @@ class PM25Client:
     def download_netcdf_if_needed(
         self, year: int, month: Optional[int] = None, force_download: bool = False
     ) -> str:
-        """Download NetCDF file from AWS if not already cached.
+        """Download NetCDF file from AWS if not cached.
 
         Args:
             year: Year for data.
@@ -687,7 +1196,7 @@ class PM25Client:
             force_download: Whether to re-download even if file exists.
 
         Returns:
-            Path to the downloaded NetCDF file.
+            Path to the downloaded NetCDF or GeoTIFF file.
 
         Raises:
             requests.RequestException: If download fails.
@@ -695,7 +1204,10 @@ class PM25Client:
         """
         cached_path = Path(self.get_netcdf_path(year, month))
 
-        # Check if file already exists and is valid
+        # Also check for GeoTIFF version (from GEE downloads)
+        cached_tif_path = cached_path.with_suffix(".tif")
+
+        # Check if NetCDF file exists
         if cached_path.exists() and not force_download:
             file_size = cached_path.stat().st_size
             if file_size > 1024 * 1024:  # At least 1MB (reasonable for NetCDF)
@@ -704,24 +1216,33 @@ class PM25Client:
             else:
                 print("Warning: Cached file appears incomplete, re-downloading...")
 
-        # Download from AWS
+        # Check if GeoTIFF file exists (from previous GEE download)
+        if cached_tif_path.exists() and not force_download:
+            file_size = cached_tif_path.stat().st_size
+            if file_size > 100 * 1024:  # At least 100KB (reasonable for GeoTIFF)
+                print(f"Using cached GeoTIFF file: {cached_tif_path}")
+                return str(cached_tif_path)
+
+        cached_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Try AWS S3 first with boto3 (proper anonymous access)
+        print(f"Attempting download from AWS S3...")
+
+        s3_result = self._download_from_s3_boto3(year, month, cached_path)
+        if s3_result:
+            return s3_result
+
         aws_url = self._get_aws_url(year, month)
-        print("Downloading PM2.5 data from AWS...")
+        print(f"Trying S3 download via HTTP (fallback)...")
         print(f"Source: {aws_url}")
-        print(f"Destination: {cached_path}")
 
         try:
             response = _request_with_ssl_fallback(
                 method="get", url=aws_url, stream=True, timeout=300
             )
 
-            # Ensure directory exists
-            cached_path.parent.mkdir(parents=True, exist_ok=True)
-
-            # Get file size for progress indication
             total_size = int(response.headers.get("content-length", 0))
 
-            # Use tqdm progress bar
             chunk_size = 8192
             with open(cached_path, "wb") as f:
                 with tqdm(
@@ -729,7 +1250,7 @@ class PM25Client:
                     unit="B",
                     unit_scale=True,
                     unit_divisor=1024,
-                    desc="Downloading",
+                    desc="Downloading (HTTP)",
                     ncols=80,
                 ) as pbar:
                     for chunk in response.iter_content(chunk_size=chunk_size):
@@ -738,19 +1259,252 @@ class PM25Client:
                             pbar.update(len(chunk))
 
             final_size = cached_path.stat().st_size
-            print(f"✓ Download complete: {final_size / (1024*1024):.1f} MB")
+            print(f"✓ AWS download complete: {final_size / (1024*1024):.1f} MB")
             return str(cached_path)
 
-        except requests.RequestException as e:
+        except requests.RequestException as aws_error:
+            print(f"⚠ AWS download failed: {aws_error}")
+            print(f"Trying fallback: Google Earth Engine...")
+
             if cached_path.exists():
-                cached_path.unlink()  # Remove incomplete file
-            raise requests.RequestException(
-                f"Failed to download NetCDF data: {e}"
-            ) from e
-        except IOError as e:
-            if cached_path.exists():
-                cached_path.unlink()  # Remove incomplete file
-            raise IOError(f"Failed to write NetCDF file: {e}") from e
+                cached_path.unlink()
+
+            gee_path = self._download_from_gee(year, month)
+            if gee_path:
+                return gee_path
+
+            filename = self._get_aws_filename(year, month)
+            if month is None:
+                wustl_path = f"GL/Annual/{filename}"
+            else:
+                wustl_path = f"GL/Monthly/{year}/{filename}"
+
+            if not self.gee_initialized:
+                gee_error = "Not authenticated (run 'earthengine authenticate')"
+            elif not (self.gee_year_range[0] <= year <= self.gee_year_range[1]):
+                gee_error = f"Year {year} outside range ({self.gee_year_range[0]}-{self.gee_year_range[1]})"
+            else:
+                gee_error = "Download failed"
+
+            manual_instructions = (
+                f"\n{'='*80}\n"
+                f"AUTOMATED DOWNLOAD FAILED\n"
+                f"{'='*80}\n\n"
+                f"All automated download sources are currently unavailable:\n"
+                f"  ✗ AWS S3: {aws_error}\n"
+                f"  ✗ Google Earth Engine: {gee_error}\n\n"
+                f"MANUAL DOWNLOAD REQUIRED:\n\n"
+                f"Visit the WUSTL data portal and download manually:\n\n"
+                f"V6 Data (0.01° resolution, 1998-2023):\n"
+                f"  URL: {self.box_shared_folder}\n"
+                f"  Path: {wustl_path}\n\n"
+                f"V5 Data (0.01° resolution, 1998-2024):\n"
+                f"  URL: https://wustl.box.com/v/ACAG-V5GL0502-GWRPM25\n"
+                f"  Path: {wustl_path}\n\n"
+                f"After download:\n"
+                f"  1. Save file as: {cached_path}\n"
+                f"  2. Re-run your script\n\n"
+                f"{'='*80}\n"
+            )
+
+            raise requests.RequestException(manual_instructions) from aws_error
+
+    def _detect_pm25_variable(self, ds: xr.Dataset) -> Tuple[str, xr.Dataset]:
+        """Detect PM2.5 variable name and prepare dataset.
+
+        Args:
+            ds: xarray Dataset.
+
+        Returns:
+            Tuple of (variable_name, processed_dataset).
+        """
+        if "band_data" in ds.variables:
+            pm25_var = "band_data"
+            if "band" in ds.dims:
+                ds = ds.squeeze("band", drop=True)
+        elif "PM25" in ds.variables:
+            pm25_var = "PM25"
+        elif "GWRPM25" in ds.variables:
+            pm25_var = "GWRPM25"
+        else:
+            available_vars = list(ds.variables.keys())
+            raise ValueError(
+                f"PM2.5 variable not found. Available variables: {available_vars}"
+            )
+        return pm25_var, ds
+
+    def _detect_coordinates(self, ds: xr.Dataset) -> Tuple[str, str]:
+        """Detect coordinate names in dataset.
+
+        Args:
+            ds: xarray Dataset.
+
+        Returns:
+            Tuple of (latitude_coord, longitude_coord).
+        """
+        if "latitude" in ds.coords and "longitude" in ds.coords:
+            return "latitude", "longitude"
+        elif "lat" in ds.coords and "lon" in ds.coords:
+            return "lat", "lon"
+        elif "y" in ds.coords and "x" in ds.coords:
+            return "y", "x"
+        else:
+            raise ValueError("Could not find latitude/longitude coordinates in file")
+
+    def _prepare_pm25_data(
+        self,
+        ds: xr.Dataset,
+        pm25_var: str,
+        lat_coord: str,
+        lon_coord: str,
+        bbox: Tuple[float, float, float, float],
+        buffer: float = 0.1,
+    ) -> xr.DataArray:
+        """Load and prepare PM2.5 data for a bounding box.
+
+        Args:
+            ds: xarray Dataset.
+            pm25_var: Name of PM2.5 variable.
+            lat_coord: Name of latitude coordinate.
+            lon_coord: Name of longitude coordinate.
+            bbox: Bounding box as (minx, miny, maxx, maxy).
+            buffer: Buffer to add around bbox in degrees.
+
+        Returns:
+            PM2.5 DataArray ready for clipping.
+        """
+        lat_vals = ds[lat_coord].values
+        lon_vals = ds[lon_coord].values
+        lat_ascending = lat_vals[0] < lat_vals[-1]
+        lon_ascending = lon_vals[0] < lon_vals[-1]
+
+        if lat_ascending:
+            lat_slice = slice(bbox[1] - buffer, bbox[3] + buffer)
+        else:
+            lat_slice = slice(bbox[3] + buffer, bbox[1] - buffer)
+
+        if lon_ascending:
+            lon_slice = slice(bbox[0] - buffer, bbox[2] + buffer)
+        else:
+            lon_slice = slice(bbox[2] + buffer, bbox[0] - buffer)
+
+        ds_subset = ds.sel({lat_coord: lat_slice, lon_coord: lon_slice})
+        pm25 = ds_subset[pm25_var].load()
+
+        if not lat_ascending:
+            pm25 = pm25.sortby(lat_coord)
+        if not lon_ascending:
+            pm25 = pm25.sortby(lon_coord)
+
+        pm25 = pm25.rio.set_spatial_dims(x_dim=lon_coord, y_dim=lat_coord)
+        pm25 = pm25.rio.write_crs("EPSG:4326")
+
+        return pm25
+
+    def _calculate_stats(
+        self,
+        clipped: xr.DataArray,
+        include_count: bool = False,
+        allow_empty: bool = False,
+    ) -> Dict[str, float]:
+        """Calculate statistics from clipped PM2.5 data.
+
+        Args:
+            clipped: Clipped PM2.5 DataArray.
+            include_count: Whether to include count in results.
+            allow_empty: If True, return NaN stats for empty data. If False, raise error.
+
+        Returns:
+            Dictionary with mean, std, min, max (and optionally count) statistics.
+
+        Raises:
+            ValueError: If no valid data found and allow_empty=False.
+        """
+        values = clipped.values.flatten()
+        values = values[~np.isnan(values)]
+
+        if len(values) == 0:
+            if not allow_empty:
+                raise ValueError(
+                    "No valid PM2.5 data found within the polygon boundary"
+                )
+            stats = {
+                "mean": np.nan,
+                "std": np.nan,
+                "min": np.nan,
+                "max": np.nan,
+            }
+            if include_count:
+                stats["count"] = 0
+            return stats
+
+        stats = {
+            "mean": float(values.mean()),
+            "std": float(values.std()),
+            "min": float(values.min()),
+            "max": float(values.max()),
+        }
+        if include_count:
+            stats["count"] = len(values)
+        return stats
+
+    def get_pm25_at_point(
+        self,
+        latitude: float,
+        longitude: float,
+        year: int,
+        month: Optional[int] = None,
+    ) -> float:
+        """Get PM2.5 value at a specific latitude/longitude point.
+
+        Selects the nearest grid cell to the specified coordinates.
+
+        Args:
+            latitude: Latitude in decimal degrees.
+            longitude: Longitude in decimal degrees.
+            year: Year of the data.
+            month: Optional month (1-12). If None, uses annual data.
+
+        Returns:
+            PM2.5 value in µg/m³ at the nearest grid cell.
+
+        Raises:
+            ValueError: If point is outside data bounds or no data available.
+            requests.RequestException: If download fails.
+
+        Example:
+            >>> client = PM25Client()
+            >>> pm25 = client.get_pm25_at_point(28.6139, 77.2090, year=2020, month=1)
+            >>> print(f"PM2.5: {pm25:.2f} µg/m³")
+        """
+        nc_file = self.download_netcdf_if_needed(year, month)
+
+        with xr.open_dataset(nc_file) as ds:
+            pm25_var, ds = self._detect_pm25_variable(ds)
+            lat_coord, lon_coord = self._detect_coordinates(ds)
+
+            try:
+                point_data = ds.sel(
+                    {lat_coord: latitude, lon_coord: longitude}, method="nearest"
+                )
+            except (KeyError, ValueError) as e:
+                raise ValueError(
+                    f"Point ({latitude}, {longitude}) is outside data bounds"
+                ) from e
+
+            pm25_value = point_data[pm25_var].values
+
+            if hasattr(pm25_value, "item"):
+                pm25_value = pm25_value.item()
+            else:
+                pm25_value = float(pm25_value)
+
+            if np.isnan(pm25_value):
+                raise ValueError(
+                    f"No PM2.5 data available at ({latitude}, {longitude})"
+                )
+
+            return pm25_value
 
     def get_pm25_stats(
         self,
@@ -783,23 +1537,18 @@ class PM25Client:
             requests.RequestException: If NetCDF download fails.
             ValueError: If group_by column not found in GeoJSON.
         """
-        # Check GeoJSON file first
         if not os.path.exists(geojson_file):
             raise FileNotFoundError(f"GeoJSON file not found: {geojson_file}")
 
-        # Download NetCDF file if needed
         nc_file = self.download_netcdf_if_needed(year, month)
 
-        # Read and process polygon first to get bounding box
         gdf = gpd.read_file(geojson_file)
         gdf = gdf.to_crs("EPSG:4326")
 
         # If group_by is specified, delegate to grouped processing
         if group_by is not None:
-            # Parse comma-separated columns
             group_cols = [col.strip() for col in group_by.split(",")]
 
-            # Validate all columns exist
             missing_cols = [col for col in group_cols if col not in gdf.columns]
             if missing_cols:
                 available_columns = list(gdf.columns)
@@ -809,91 +1558,17 @@ class PM25Client:
                 )
 
             return self._get_pm25_stats_grouped(gdf, Path(nc_file), group_cols)
-
-        # Otherwise, process as combined polygon
-        polygon = gdf.union_all()  # Combine polygons if multiple
-        bounds = polygon.bounds  # (minx, miny, maxx, maxy)
+        # Combine polygons if multiple
+        polygon = gdf.union_all()
+        bounds = polygon.bounds
 
         with xr.open_dataset(nc_file) as ds:
-            # Check if this is the new WUSTL format or old format
-            if "PM25" in ds.variables:
-                pm25_var = "PM25"
-            elif "GWRPM25" in ds.variables:
-                pm25_var = "GWRPM25"
-            else:
-                available_vars = list(ds.variables.keys())
-                raise ValueError(
-                    f"PM2.5 variable not found. Available variables: {available_vars}"
-                )
+            pm25_var, ds = self._detect_pm25_variable(ds)
+            lat_coord, lon_coord = self._detect_coordinates(ds)
+            pm25 = self._prepare_pm25_data(ds, pm25_var, lat_coord, lon_coord, bounds)
 
-            # Handle coordinate naming variations
-            if "latitude" in ds.coords and "longitude" in ds.coords:
-                lat_coord, lon_coord = "latitude", "longitude"
-            elif "lat" in ds.coords and "lon" in ds.coords:
-                lat_coord, lon_coord = "lat", "lon"
-            else:
-                raise ValueError(
-                    "Could not find latitude/longitude coordinates in NetCDF file"
-                )
-
-            # Add small buffer to ensure we capture the polygon
-            lat_buffer = 0.1
-            lon_buffer = 0.1
-
-            # Get the actual coordinate values to determine order
-            lat_vals = ds[lat_coord].values
-            lon_vals = ds[lon_coord].values
-
-            # Determine if coordinates are ascending or descending
-            lat_ascending = lat_vals[0] < lat_vals[-1]
-            lon_ascending = lon_vals[0] < lon_vals[-1]
-
-            if lat_ascending:
-                lat_slice = slice(bounds[1] - lat_buffer, bounds[3] + lat_buffer)
-            else:
-                lat_slice = slice(bounds[3] + lat_buffer, bounds[1] - lat_buffer)
-
-            if lon_ascending:
-                lon_slice = slice(bounds[0] - lon_buffer, bounds[2] + lon_buffer)
-            else:
-                lon_slice = slice(bounds[2] + lon_buffer, bounds[0] - lon_buffer)
-
-            ds_subset = ds.sel({lat_coord: lat_slice, lon_coord: lon_slice})
-
-            # Extract the PM25 variable
-            pm25 = ds_subset[pm25_var]
-
-            # Load into memory
-            pm25 = pm25.load()
-
-            # Ensure coordinates are ascending (required by rioxarray)
-            if not lat_ascending:
-                pm25 = pm25.sortby(lat_coord)
-            if not lon_ascending:
-                pm25 = pm25.sortby(lon_coord)
-
-            # Set spatial dimensions for rioxarray
-            pm25 = pm25.rio.set_spatial_dims(x_dim=lon_coord, y_dim=lat_coord)
-            pm25 = pm25.rio.write_crs("EPSG:4326")
-
-            # Clip to polygon and calculate statistics
             clipped = pm25.rio.clip([polygon], crs="EPSG:4326", all_touched=True)
-
-            # Get values and filter NaN
-            values = clipped.values.flatten()
-            values = values[~np.isnan(values)]
-
-            if len(values) == 0:
-                raise ValueError(
-                    "No valid PM2.5 data found within the polygon boundary"
-                )
-
-            return {
-                "mean": float(values.mean()),
-                "std": float(values.std()),
-                "min": float(values.min()),
-                "max": float(values.max()),
-            }
+            return self._calculate_stats(clipped)
 
     def _get_pm25_stats_grouped(
         self, gdf: gpd.GeoDataFrame, nc_file: Path, group_by: Union[str, List[str]]
@@ -909,119 +1584,37 @@ class PM25Client:
             DataFrame with statistics for each unique value or combination in the
             group_by column(s).
         """
-        # Ensure group_by is a list
         group_cols = [group_by] if isinstance(group_by, str) else group_by
-        # Get overall bounding box for all geometries
-        bbox = gdf.total_bounds  # [minx, miny, maxx, maxy]
+        bbox = gdf.total_bounds
 
-        # Load dataset and subset to bounding box
         with xr.open_dataset(nc_file) as ds:
-            # Check variable and coordinate names
-            if "PM25" in ds.variables:
-                pm25_var = "PM25"
-            elif "GWRPM25" in ds.variables:
-                pm25_var = "GWRPM25"
-            else:
-                available_vars = list(ds.variables.keys())
-                raise ValueError(
-                    f"PM2.5 variable not found. Available variables: {available_vars}"
-                )
+            pm25_var, ds = self._detect_pm25_variable(ds)
+            lat_coord, lon_coord = self._detect_coordinates(ds)
+            pm25 = self._prepare_pm25_data(ds, pm25_var, lat_coord, lon_coord, bbox)
 
-            if "latitude" in ds.coords and "longitude" in ds.coords:
-                lat_coord, lon_coord = "latitude", "longitude"
-            elif "lat" in ds.coords and "lon" in ds.coords:
-                lat_coord, lon_coord = "lat", "lon"
-            else:
-                raise ValueError(
-                    "Could not find latitude/longitude coordinates in NetCDF file"
-                )
-
-            # Get coordinate values to determine order
-            lat_vals = ds[lat_coord].values
-            lon_vals = ds[lon_coord].values
-            lat_ascending = lat_vals[0] < lat_vals[-1]
-            lon_ascending = lon_vals[0] < lon_vals[-1]
-
-            # Create slice with correct ordering
-            lat_buffer = 0.1
-            lon_buffer = 0.1
-
-            if lat_ascending:
-                lat_slice = slice(bbox[1] - lat_buffer, bbox[3] + lat_buffer)
-            else:
-                lat_slice = slice(bbox[3] + lat_buffer, bbox[1] - lat_buffer)
-
-            if lon_ascending:
-                lon_slice = slice(bbox[0] - lon_buffer, bbox[2] + lon_buffer)
-            else:
-                lon_slice = slice(bbox[2] + lon_buffer, bbox[0] - lon_buffer)
-
-            ds_subset = ds.sel({lat_coord: lat_slice, lon_coord: lon_slice})
-
-            # Extract PM25 variable
-            pm25 = ds_subset[pm25_var]
-            pm25 = pm25.load()
-
-            # Ensure coordinates are ascending
-            if not lat_ascending:
-                pm25 = pm25.sortby(lat_coord)
-            if not lon_ascending:
-                pm25 = pm25.sortby(lon_coord)
-
-            # Set spatial dimensions for rioxarray
-            pm25 = pm25.rio.set_spatial_dims(x_dim=lon_coord, y_dim=lat_coord)
-            pm25 = pm25.rio.write_crs("EPSG:4326")
-
-            # Group by the specified column(s) and process each group
             results = []
-            # For single column, don't use list to avoid tuple wrapping
             groupby_arg = group_cols[0] if len(group_cols) == 1 else group_cols
 
             for group_name, group_gdf in gdf.groupby(groupby_arg):
-                # Combine all polygons in this group
                 combined_geom = group_gdf.union_all()
 
                 try:
-                    # Clip to the combined geometry
                     clipped = pm25.rio.clip(
                         [combined_geom], crs="EPSG:4326", all_touched=True
                     )
 
-                    # Get values and filter NaN
-                    values = clipped.values.flatten()
-                    values = values[~np.isnan(values)]
-
-                    # Create result dict with group columns
                     result = {}
                     if len(group_cols) == 1:
-                        # Single column grouping - group_name is a scalar
                         result[group_cols[0]] = group_name
                     else:
-                        # Multiple column grouping - group_name is a tuple
                         for i, col in enumerate(group_cols):
                             result[col] = group_name[i]
 
-                    # Add statistics
-                    if len(values) > 0:
-                        result.update(
-                            {
-                                "mean": float(values.mean()),
-                                "std": float(values.std()),
-                                "min": float(values.min()),
-                                "max": float(values.max()),
-                                "count": len(values),
-                            }
+                    result.update(
+                        self._calculate_stats(
+                            clipped, include_count=True, allow_empty=True
                         )
-                    else:
-                        result.update(
-                            {
-                                "mean": np.nan,
-                                "std": np.nan,
-                                "min": np.nan,
-                                "max": np.nan,
-                                "count": 0,
-                            }
-                        )
+                    )
 
                     results.append(result)
 
@@ -1070,73 +1663,19 @@ class PM25Client:
         This function automatically downloads the required NetCDF data from AWS
         if not cached locally.
         """
-        # Check GeoJSON file first
         if not os.path.exists(geojson_file):
             raise FileNotFoundError(f"GeoJSON file not found: {geojson_file}")
 
-        # Download NetCDF file if needed
         nc_file = self.download_netcdf_if_needed(year, month)
 
-        # Read GeoJSON and get overall bounding box first
         gdf = gpd.read_file(geojson_file)
         gdf = gdf.to_crs("EPSG:4326")
-        bbox = gdf.total_bounds  # [minx, miny, maxx, maxy]
+        bbox = gdf.total_bounds
 
         with xr.open_dataset(nc_file) as ds:
-            # Check if this is the new WUSTL format or old format
-            if "PM25" in ds.variables:
-                pm25_var = "PM25"
-            elif "GWRPM25" in ds.variables:
-                pm25_var = "GWRPM25"
-            else:
-                available_vars = list(ds.variables.keys())
-                raise ValueError(
-                    f"PM2.5 variable not found. Available variables: {available_vars}"
-                )
-
-            # Handle coordinate naming variations
-            if "latitude" in ds.coords and "longitude" in ds.coords:
-                lat_coord, lon_coord = "latitude", "longitude"
-            elif "lat" in ds.coords and "lon" in ds.coords:
-                lat_coord, lon_coord = "lat", "lon"
-            else:
-                raise ValueError(
-                    "Could not find latitude/longitude coordinates in NetCDF file"
-                )
-
-            lat_buffer = 0.1
-            lon_buffer = 0.1
-
-            lat_vals = ds[lat_coord].values
-            lon_vals = ds[lon_coord].values
-            lat_ascending = lat_vals[0] < lat_vals[-1]
-            lon_ascending = lon_vals[0] < lon_vals[-1]
-
-            if lat_ascending:
-                lat_slice = slice(bbox[1] - lat_buffer, bbox[3] + lat_buffer)
-            else:
-                lat_slice = slice(bbox[3] + lat_buffer, bbox[1] - lat_buffer)
-
-            if lon_ascending:
-                lon_slice = slice(bbox[0] - lon_buffer, bbox[2] + lon_buffer)
-            else:
-                lon_slice = slice(bbox[2] + lon_buffer, bbox[0] - lon_buffer)
-
-            ds_subset = ds.sel({lat_coord: lat_slice, lon_coord: lon_slice})
-
-            # Extract the PM25 variable
-            pm25 = ds_subset[pm25_var]
-            pm25 = pm25.load()
-
-            # Ensure coordinates are ascending
-            if not lat_ascending:
-                pm25 = pm25.sortby(lat_coord)
-            if not lon_ascending:
-                pm25 = pm25.sortby(lon_coord)
-
-            # Set spatial dimensions for rioxarray
-            pm25 = pm25.rio.set_spatial_dims(x_dim=lon_coord, y_dim=lat_coord)
-            pm25 = pm25.rio.write_crs("EPSG:4326")
+            pm25_var, ds = self._detect_pm25_variable(ds)
+            lat_coord, lon_coord = self._detect_coordinates(ds)
+            pm25 = self._prepare_pm25_data(ds, pm25_var, lat_coord, lon_coord, bbox)
 
             # Determine column name once at the beginning
             if id_field and id_field in gdf.columns:
@@ -1156,20 +1695,11 @@ class PM25Client:
 
                 try:
                     clipped = pm25.rio.clip([geom], crs="EPSG:4326", all_touched=True)
-
-                    # Get values and filter NaN
-                    values = clipped.values.flatten()
-                    values = values[~np.isnan(values)]
-
-                    if values.size > 0:
-                        mean_val = float(values.mean())
-                        std_val = float(values.std())
-                    else:
-                        mean_val, std_val = np.nan, np.nan
+                    stats = self._calculate_stats(clipped, allow_empty=True)
+                    mean_val, std_val = stats["mean"], stats["std"]
                 except Exception:
                     mean_val, std_val = np.nan, np.nan
 
-                # Get feature identifier based on determined column
                 if column_name == "index":
                     feature_id = idx
                 else:

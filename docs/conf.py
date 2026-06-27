@@ -1,7 +1,4 @@
 # Configuration file for the Sphinx documentation builder.
-#
-# For the full list of built-in configuration values, see the documentation:
-# https://www.sphinx-doc.org/en/master/usage/configuration.html
 
 import importlib
 import os
@@ -14,20 +11,15 @@ try:
 except Exception:
     package_version = "0.1.0"
 
-# -- Project information -----------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = "vayuayan"
-copyright = "2025, Mahesh Prajapat and Saket Choudhary"
+copyright = "2026, Mahesh Prajapat and Saket Choudhary"
 author = "Mahesh Prajapat and Saket Choudhary"
 release = package_version
 version = os.environ.get("SMV_CURRENT_VERSION") or os.environ.get(
     "READTHEDOCS_VERSION_NAME",
     release,
 )
-
-# -- General configuration ---------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
 extensions = [
     "sphinx.ext.autodoc",
@@ -37,6 +29,8 @@ extensions = [
     "sphinx.ext.intersphinx",
     "myst_nb",
     "sphinx_multiversion",
+    "sphinxext.opengraph",
+    "sphinx_sitemap",
 ]
 
 templates_path = ["_templates"]
@@ -44,7 +38,6 @@ exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
 language = "en"
 
-# -- Autodoc configuration --------------------------------------------------
 autodoc_default_options = {
     "members": True,
     "member-order": "bysource",
@@ -53,8 +46,6 @@ autodoc_default_options = {
     "exclude-members": "__weakref__",
 }
 
-# Mock heavy optional dependencies if they are unavailable so autodoc can
-# import vayuayan modules without requiring compiled geospatial stacks.
 _OPTIONAL_LIBS = [
     "geopandas",
     "geopy",
@@ -71,7 +62,6 @@ for _module in _OPTIONAL_LIBS:
     except Exception:
         autodoc_mock_imports.append(_module)
 
-# -- Napoleon settings -------------------------------------------------------
 napoleon_google_docstring = True
 napoleon_numpy_docstring = True
 napoleon_include_init_with_doc = False
@@ -84,22 +74,29 @@ napoleon_use_ivar = False
 napoleon_use_param = True
 napoleon_use_rtype = True
 
-# -- Intersphinx mapping ----------------------------------------------------
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
     "pandas": ("https://pandas.pydata.org/docs/", None),
     "requests": ("https://requests.readthedocs.io/en/latest/", None),
 }
 
-# -- Options for HTML output -------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
 html_theme = "furo"
 html_static_path = ["_static"]
 html_css_files = ["css/custom.css"]
+html_baseurl = "https://vayuayan.saketlab.org/"
 
-# Logo configuration
 html_logo = "assets/vayuayan.png"
+
+ogp_site_url = html_baseurl
+ogp_site_name = "vayuayan: Air Quality & Pollution Data for Python"
+ogp_image = html_baseurl + "_static/vayuayan_social_preview.png"
+ogp_enable_meta_description = True
+ogp_custom_meta_tags = [
+    '<meta name="twitter:card" content="summary_large_image">',
+]
+sitemap_url_scheme = "{link}"
+html_extra_path = ["robots.txt"]
 
 html_sidebars = {
     "**": [
@@ -112,7 +109,6 @@ html_sidebars = {
     ]
 }
 
-# -- Theme options -----------------------------------------------------------
 html_theme_options = {
     "navigation_with_keys": True,
     "sidebar_hide_name": False,  # Show name alongside logo
