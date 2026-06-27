@@ -60,6 +60,8 @@ docs = [
     "sphinx>=8.2.3",
     "furo>=2024.8.6",
     "sphinx-multiversion>=0.2.4",
+    "sphinxext-opengraph>=0.9.1",
+    "sphinx-sitemap>=2.6.0",
 ]
 notebooks = [
     "jupyter",

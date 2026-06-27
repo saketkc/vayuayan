@@ -217,9 +217,9 @@ def _request_with_ssl_fallback(
     try:
         request_kwargs["verify"] = True
         if method.lower() == "get":
-            response = requests.get(url, **request_kwargs)
+            response = requests.get(url, **request_kwargs)  # nosec B113 - timeout in request_kwargs
         else:
-            response = requests.post(url, **request_kwargs)
+            response = requests.post(url, **request_kwargs)  # nosec B113 - timeout in request_kwargs
         response.raise_for_status()
         return response
     except requests.exceptions.SSLError as e:
@@ -228,9 +228,9 @@ def _request_with_ssl_fallback(
         try:
             request_kwargs["verify"] = False
             if method.lower() == "get":
-                response = requests.get(url, **request_kwargs)
+                response = requests.get(url, **request_kwargs)  # nosec B113 - timeout in request_kwargs
             else:
-                response = requests.post(url, **request_kwargs)
+                response = requests.post(url, **request_kwargs)  # nosec B113 - timeout in request_kwargs
             response.raise_for_status()
             return response
         except Exception as fallback_error:

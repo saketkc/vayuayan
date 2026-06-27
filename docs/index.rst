@@ -1,3 +1,7 @@
+.. meta::
+   :description: vayuayan is a Python package and CLI for fetching and analysing air quality data worldwide: WUSTL ACAG satellite PM2.5 (1998-2024) and CPCB India AQI monitoring (historical and live).
+   :keywords: air quality, PM2.5, pollution, AQI, CPCB, India, WUSTL ACAG, satellite, Python, air pollution data
+
 vayuayan: Collect and Analyze Air Quality and Pollution Data
 ============================================================
 
